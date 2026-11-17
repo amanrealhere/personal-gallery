@@ -74,6 +74,7 @@ class ThumbnailGenerationWorker(
         var processed = 0
         var successes = 0
         var failures = 0
+        var lastProgressUpdateAt = System.currentTimeMillis()
         val albumFiles = albums.map { album ->
             album to discoverImages(File(album.canonicalPath))
         }
@@ -165,9 +166,13 @@ class ThumbnailGenerationWorker(
                         dao.insertRecords(pendingRecords.toList())
                         pendingRecords.clear()
                     }
-                    if (processed % 100 == 0 || processed == total) {
+                    val progressTime = System.currentTimeMillis()
+                    if (processed % 25 == 0 || processed == total ||
+                        progressTime - lastProgressUpdateAt >= 1_000L
+                    ) {
                         dao.updateProgress(generationId, processed, successes, failures)
                         setProgress(workDataOfProgress(processed, total, failures))
+                        lastProgressUpdateAt = progressTime
                         setForeground(
                             createForegroundInfo(
                                 "$scopeLabel · Creating thumbnails",
@@ -197,6 +202,7 @@ class ThumbnailGenerationWorker(
                 dao.insertRecords(pendingRecords)
             }
             dao.updateProgress(generationId, processed, successes, failures)
+            setProgress(workDataOfProgress(processed, total, failures))
             // Switch every affected album and mark the generation complete atomically.
             dao.activateGeneration(
                 generationId,
@@ -204,8 +210,9 @@ class ThumbnailGenerationWorker(
                 System.currentTimeMillis(),
                 pendingStates
             )
-            setProgress(workDataOfProgress(processed, total, failures))
-            postCompletionNotification(scopeLabel, processed, total, failures)
+            runCatching {
+                postCompletionNotification(scopeLabel, processed, total, failures)
+            }
             Result.success()
         } catch (cancelled: CancellationException) {
             dao.finishGeneration(generationId, STATUS_INTERRUPTED, System.currentTimeMillis())
