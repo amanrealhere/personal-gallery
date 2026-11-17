@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
+import kotlinx.coroutines.flow.first
 import com.amanrealhere.personalgallery.PersonalGalleryApplication
 import com.amanrealhere.personalgallery.data.local.AlbumThumbnailStateEntity
 import com.amanrealhere.personalgallery.data.repository.AlbumRegistrationResult
@@ -96,8 +97,69 @@ class GalleryViewModel(
 
     fun ensureAlbumThumbnails(albumId: String) {
         viewModelScope.launch(Dispatchers.IO) {
+            val workManager = WorkManager.getInstance(getApplication<Application>())
+            val hasQueuedGeneration = workManager
+                .getWorkInfosForUniqueWorkFlow(ThumbnailWorkScheduler.UNIQUE_WORK_NAME)
+                .first()
+                .any { !it.state.isFinished }
+            if (hasQueuedGeneration) return@launch
+
+            val album = database.albumDao().findById(albumId) ?: return@launch
+            val folder = File(album.canonicalPath)
+            val listed = folder.listFiles() ?: return@launch
+            val files = listed.asSequence()
+                .filter { it.isFile && it.extension.lowercase() in SUPPORTED_EXTENSIONS }
+                .sortedWith(
+                    compareByDescending<File> { it.lastModified() }
+                        .thenBy { it.absolutePath }
+                )
+                .toList()
+
             val state = database.thumbnailDao().albumState(albumId)
-            if (state == null || state.activeGenerationId == null) {
+            val activeGenerationId = state?.activeGenerationId
+            var cacheIsCurrent = state != null && activeGenerationId != null &&
+                state.imageCount == files.size &&
+                state.latestImageModifiedAtEpochMillis == files.firstOrNull()?.lastModified()
+
+            if (cacheIsCurrent && activeGenerationId != null) {
+                val records = database.thumbnailDao().records(activeGenerationId, albumId)
+                val regularByPath = records
+                    .filter { it.kind == ThumbnailGenerationWorker.KIND_REGULAR }
+                    .associateBy { it.sourcePath }
+
+                cacheIsCurrent = files.all { file ->
+                    val record = regularByPath[file.absolutePath]
+                    record != null &&
+                        record.status in setOf(
+                            ThumbnailGenerationWorker.STATUS_SUCCESS,
+                            ThumbnailGenerationWorker.STATUS_REUSED
+                        ) &&
+                        record.sourceCanonicalPath == runCatching { file.canonicalPath }.getOrDefault(file.absolutePath) &&
+                        record.sourceName == file.name &&
+                        record.sourceSizeBytes == file.length() &&
+                        record.sourceModifiedAtEpochMillis == file.lastModified() &&
+                        File(record.outputPath).let { it.isFile && it.length() > 0L }
+                }
+
+                val latest = files.firstOrNull()
+                if (cacheIsCurrent && latest != null) {
+                    val cover = records.firstOrNull {
+                        it.kind == ThumbnailGenerationWorker.KIND_COVER &&
+                            it.sourcePath == latest.absolutePath
+                    }
+                    cacheIsCurrent = cover != null &&
+                        cover.status in setOf(
+                            ThumbnailGenerationWorker.STATUS_SUCCESS,
+                            ThumbnailGenerationWorker.STATUS_REUSED
+                        ) &&
+                        state?.coverThumbnailPath == cover.outputPath &&
+                        File(cover.outputPath).let { it.isFile && it.length() > 0L }
+                } else if (cacheIsCurrent && latest == null) {
+                    cacheIsCurrent = state?.coverThumbnailPath == null
+                }
+            }
+
+            if (!cacheIsCurrent) {
                 ThumbnailWorkScheduler.enqueueAlbum(getApplication(), albumId, force = false)
             }
         }
