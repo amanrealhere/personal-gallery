@@ -12,11 +12,12 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
+import androidx.compose.foundation.Image
+import androidx.compose.ui.res.painterResource
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -49,11 +50,10 @@ fun HomeScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Filled.Folder,
+                    Image(
+                        painter = painterResource(R.drawable.ic_gallery_folder),
                         contentDescription = null,
-                        modifier = Modifier.size(64.dp).padding(bottom = 8.dp),
-                        tint = MaterialTheme.colorScheme.primary
+                        modifier = Modifier.size(64.dp).padding(bottom = 8.dp)
                     )
 
                     Text(
@@ -154,11 +154,10 @@ fun HomeScreen(
                                                 .padding(vertical = 42.dp),
                                             contentAlignment = Alignment.Center
                                         ) {
-                                            Icon(
-                                                imageVector = Icons.Filled.Folder,
+                                            Image(
+                                                painter = painterResource(R.drawable.ic_gallery_folder),
                                                 contentDescription = null,
-                                                modifier = Modifier.size(44.dp),
-                                                tint = MaterialTheme.colorScheme.primary
+                                                modifier = Modifier.size(44.dp)
                                             )
                                         }
                                     }

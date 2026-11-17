@@ -13,9 +13,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material3.Icon
+import androidx.compose.foundation.Image
+import androidx.compose.ui.res.painterResource
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.MaterialTheme
@@ -89,8 +90,8 @@ fun AlbumsSidebar(
                         Text(if (sidebarExpanded) "Albums" else "")
                     },
                     icon = {
-                        Icon(
-                            imageVector = Icons.Filled.Folder,
+                        Image(
+                            painter = painterResource(R.drawable.ic_gallery_folder),
                             contentDescription = null
                         )
                     },
@@ -99,20 +100,46 @@ fun AlbumsSidebar(
                     modifier = Modifier.weight(1f)
                 )
 
-                if (isAddAlbumSelected) {
-                    FilledTonalIconButton(onClick = onAddAlbumClick) {
-                        Icon(
-                            imageVector = Icons.Filled.Add,
-                            contentDescription = "Add album"
-                        )
+                if (sidebarExpanded) {
+                    if (isAddAlbumSelected) {
+                        FilledTonalIconButton(onClick = onAddAlbumClick) {
+                            Icon(
+                                imageVector = Icons.Filled.Add,
+                                contentDescription = "Add album"
+                            )
+                        }
+                    } else {
+                        IconButton(onClick = onAddAlbumClick) {
+                            Icon(
+                                imageVector = Icons.Filled.Add,
+                                contentDescription = "Add album",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
-                } else {
-                    IconButton(onClick = onAddAlbumClick) {
-                        Icon(
-                            imageVector = Icons.Filled.Add,
-                            contentDescription = "Add album",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                }
+            }
+
+            if (!sidebarExpanded) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    if (isAddAlbumSelected) {
+                        FilledTonalIconButton(onClick = onAddAlbumClick) {
+                            Icon(
+                                imageVector = Icons.Filled.Add,
+                                contentDescription = "Add album"
+                            )
+                        }
+                    } else {
+                        IconButton(onClick = onAddAlbumClick) {
+                            Icon(
+                                imageVector = Icons.Filled.Add,
+                                contentDescription = "Add album",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
                 }
             }
@@ -148,8 +175,8 @@ fun AlbumsSidebar(
                             )
                         },
                         icon = {
-                            Icon(
-                                imageVector = Icons.Filled.Folder,
+                            Image(
+                                painter = painterResource(R.drawable.ic_gallery_folder),
                                 contentDescription = album.name
                             )
                         },
