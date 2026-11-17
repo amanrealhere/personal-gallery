@@ -101,11 +101,16 @@ class GalleryViewModel(
     fun ensureAlbumThumbnails(albumId: String) {
         viewModelScope.launch(Dispatchers.IO) {
             val workManager = WorkManager.getInstance(getApplication<Application>())
-            val hasQueuedGeneration = workManager
+            val pendingWorks = workManager
                 .getWorkInfosForUniqueWorkFlow(ThumbnailWorkScheduler.UNIQUE_WORK_NAME)
                 .first()
-                .any { !it.state.isFinished }
-            if (hasQueuedGeneration) return@launch
+            val alreadyCovered = pendingWorks.any { work ->
+                !work.state.isFinished && (
+                    work.inputData.getString(ThumbnailGenerationWorker.KEY_ALBUM_ID) == null ||
+                        work.inputData.getString(ThumbnailGenerationWorker.KEY_ALBUM_ID) == albumId
+                    )
+            }
+            if (alreadyCovered) return@launch
 
             val album = database.albumDao().findById(albumId) ?: return@launch
             val folder = File(album.canonicalPath)
