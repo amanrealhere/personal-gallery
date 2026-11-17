@@ -1,6 +1,5 @@
 package com.amanrealhere.personalgallery.data.thumbnail
 
-import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
@@ -12,11 +11,9 @@ import android.graphics.Matrix
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.exifinterface.media.ExifInterface
-import androidx.room.Room
 import androidx.work.CoroutineWorker
 import androidx.work.ForegroundInfo
 import androidx.work.WorkerParameters
-import com.amanrealhere.personalgallery.R
 import com.amanrealhere.personalgallery.data.local.AlbumThumbnailStateEntity
 import com.amanrealhere.personalgallery.data.local.GalleryDatabase
 import com.amanrealhere.personalgallery.data.local.ThumbnailGenerationEntity
@@ -25,6 +22,7 @@ import com.amanrealhere.personalgallery.data.storage.GalleryStorage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.first
 import java.io.File
 import java.io.FileOutputStream
 import java.util.UUID
@@ -45,9 +43,7 @@ class ThumbnailGenerationWorker(
         val requestedAlbumId = inputData.getString(KEY_ALBUM_ID)
         val force = inputData.getBoolean(KEY_FORCE, false)
         val albums = if (requestedAlbumId == null) {
-            database.albumDao().observeAll().let { flow ->
-                kotlinx.coroutines.flow.first(flow)
-            }
+            database.albumDao().observeAll().first()
         } else {
             listOfNotNull(database.albumDao().findById(requestedAlbumId))
         }
