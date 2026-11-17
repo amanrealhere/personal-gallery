@@ -237,7 +237,7 @@ class ThumbnailGenerationWorker(
                 old.sourceName == metadata.name &&
                 old.sourceSizeBytes == metadata.size &&
                 old.sourceModifiedAtEpochMillis == metadata.modified &&
-                isValidThumbnail(File(old.outputPath))
+                isValidThumbnail(File(old.outputPath), size)
             ) {
                 val temporary = File(destination.parentFile, destination.name + ".tmp")
                 return try {
@@ -246,7 +246,7 @@ class ThumbnailGenerationWorker(
                     File(old.outputPath).inputStream().use { input ->
                         FileOutputStream(temporary).use { output -> input.copyTo(output) }
                     }
-                    check(isValidThumbnail(temporary)) { "Cached thumbnail copy is invalid" }
+                    check(isValidThumbnail(temporary, size)) { "Cached thumbnail copy is invalid" }
                     check(temporary.renameTo(destination)) {
                         "Could not atomically place cached thumbnail"
                     }
@@ -376,11 +376,11 @@ class ThumbnailGenerationWorker(
         return Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
     }
 
-    private fun isValidThumbnail(file: File): Boolean {
+    private fun isValidThumbnail(file: File, expectedSize: Int): Boolean {
         if (!file.isFile || file.length() <= 0L) return false
         val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeFile(file.absolutePath, options)
-        return options.outWidth == REGULAR_SIZE || options.outWidth == COVER_SIZE
+        return options.outWidth == expectedSize && options.outHeight == expectedSize
     }
 
     private fun discoverImages(folder: File): List<File> =
