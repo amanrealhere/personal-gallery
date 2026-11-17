@@ -12,6 +12,13 @@ interface ThumbnailDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertGeneration(generation: ThumbnailGenerationEntity)
 
+    @Query("""
+        UPDATE thumbnail_generations
+        SET status = 'INTERRUPTED', completedAtEpochMillis = :completedAt
+        WHERE status = 'RUNNING'
+    """)
+    suspend fun markStaleGenerationsInterrupted(completedAt: Long)
+
     @Query("SELECT * FROM thumbnail_generations WHERE id = :id LIMIT 1")
     suspend fun generation(id: String): ThumbnailGenerationEntity?
 

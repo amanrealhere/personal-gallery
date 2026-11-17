@@ -56,6 +56,7 @@ class ThumbnailGenerationWorker(
         }
         val now = System.currentTimeMillis()
         val dao = database.thumbnailDao()
+        dao.markStaleGenerationsInterrupted(now)
         dao.insertGeneration(
             ThumbnailGenerationEntity(
                 id = generationId,
