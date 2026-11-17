@@ -1,6 +1,7 @@
 package com.amanrealhere.personalgallery.ui
 
 import android.app.Application
+import android.graphics.BitmapFactory
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.work.WorkInfo
@@ -138,7 +139,7 @@ class GalleryViewModel(
                         record.sourceName == file.name &&
                         record.sourceSizeBytes == file.length() &&
                         record.sourceModifiedAtEpochMillis == file.lastModified() &&
-                        File(record.outputPath).let { it.isFile && it.length() > 0L }
+                        isValidCachedThumbnail(File(record.outputPath), ThumbnailGenerationWorker.REGULAR_SIZE)
                 }
 
                 val latest = files.firstOrNull()
@@ -153,7 +154,7 @@ class GalleryViewModel(
                             ThumbnailGenerationWorker.STATUS_REUSED
                         ) &&
                         state?.coverThumbnailPath == cover.outputPath &&
-                        File(cover.outputPath).let { it.isFile && it.length() > 0L }
+                        isValidCachedThumbnail(File(cover.outputPath), ThumbnailGenerationWorker.COVER_SIZE)
                 } else if (cacheIsCurrent && latest == null) {
                     cacheIsCurrent = state?.coverThumbnailPath == null
                 }
@@ -163,6 +164,13 @@ class GalleryViewModel(
                 ThumbnailWorkScheduler.enqueueAlbum(getApplication(), albumId, force = false)
             }
         }
+    }
+
+    private fun isValidCachedThumbnail(file: File, expectedSize: Int): Boolean {
+        if (!file.isFile || file.length() <= 0L) return false
+        val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(file.absolutePath, options)
+        return options.outWidth == expectedSize && options.outHeight == expectedSize
     }
 
     fun regenerateAllThumbnails() {

@@ -49,6 +49,11 @@ class ThumbnailGenerationWorker(
         }
 
         val generationId = SimpleDateFormat("yyyyMMdd-HHmmss-SSS", Locale.US).format(Date()) + "-" + UUID.randomUUID().toString().take(8)
+        val scopeLabel = if (requestedAlbumId == null) {
+            "All albums"
+        } else {
+            "Album: ${albums.firstOrNull()?.name ?: requestedAlbumId}"
+        }
         val now = System.currentTimeMillis()
         val dao = database.thumbnailDao()
         dao.insertGeneration(
@@ -82,7 +87,7 @@ class ThumbnailGenerationWorker(
         setProgress(workDataOfProgress(0, total, 0))
 
         try {
-            setForeground(createForegroundInfo("Preparing thumbnails", 0, total))
+            setForeground(createForegroundInfo("$scopeLabel · Preparing thumbnails", 0, total))
             for ((album, images) in albumFiles) {
                 if (isStopped) throw CancellationException("Generation stopped")
                 val albumRoot = File(album.canonicalPath)
@@ -152,7 +157,7 @@ class ThumbnailGenerationWorker(
                         setProgress(workDataOfProgress(processed, total, failures))
                         setForeground(
                             createForegroundInfo(
-                                "Creating thumbnails",
+                                "$scopeLabel · Creating thumbnails",
                                 processed,
                                 total,
                                 failures
@@ -184,7 +189,7 @@ class ThumbnailGenerationWorker(
                 pendingStates
             )
             setProgress(workDataOfProgress(processed, total, failures))
-            postCompletionNotification(processed, total, failures)
+            postCompletionNotification(scopeLabel, processed, total, failures)
             Result.success()
         } catch (cancelled: CancellationException) {
             dao.finishGeneration(generationId, STATUS_INTERRUPTED, System.currentTimeMillis())
@@ -415,13 +420,13 @@ class ThumbnailGenerationWorker(
         )
     }
 
-    private fun postCompletionNotification(processed: Int, total: Int, failures: Int) {
+    private fun postCompletionNotification(scopeLabel: String, processed: Int, total: Int, failures: Int) {
         val notification = NotificationCompat.Builder(applicationContext, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_menu_gallery)
             .setContentTitle("Personal Gallery")
             .setContentText(
-                if (failures == 0) "Thumbnail generation complete: $processed images"
-                else "Thumbnail generation finished with $failures failures"
+                if (failures == 0) "$scopeLabel · Complete: $processed thumbnails"
+                else "$scopeLabel · Finished with $failures failures"
             )
             .setAutoCancel(true)
             .setOngoing(false)
