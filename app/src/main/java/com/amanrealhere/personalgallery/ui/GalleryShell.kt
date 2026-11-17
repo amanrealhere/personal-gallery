@@ -68,11 +68,12 @@ fun GalleryShell(viewModel: GalleryViewModel) {
             com.amanrealhere.personalgallery.data.thumbnail.ThumbnailGenerationWorker.KEY_PROGRESS_FAILURES,
             0
         )
+        val percent = if (total == 0) 0 else (processed * 100 / total).coerceIn(0, 100)
         when (work.state) {
             WorkInfo.State.ENQUEUED, WorkInfo.State.BLOCKED ->
                 "Thumbnail generation is queued"
             WorkInfo.State.RUNNING ->
-                "Generating thumbnails: $processed / $total · $failures failures"
+                "Generating thumbnails: $processed / $total ($percent%) · $failures failures"
             else -> "Thumbnail generation"
         }
     }
