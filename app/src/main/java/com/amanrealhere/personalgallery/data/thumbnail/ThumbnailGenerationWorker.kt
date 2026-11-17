@@ -391,6 +391,7 @@ class ThumbnailGenerationWorker(
             emptyList()
         } else {
             folder.walkTopDown()
+                .onEnter { it.name != ".personal-gallery" }
                 .filter { it.isFile && it.extension.lowercase() in SUPPORTED_EXTENSIONS }
                 .sortedWith(
                     compareByDescending<File> { it.lastModified() }

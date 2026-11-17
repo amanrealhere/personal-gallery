@@ -82,6 +82,7 @@ class GalleryViewModel(
                 emptyList()
             } else {
                 folder.walkTopDown()
+                    .onEnter { it.name != ".personal-gallery" }
                     .filter { it.isFile && it.extension.lowercase() in SUPPORTED_EXTENSIONS }
                     .sortedWith(
                         compareByDescending<File> { it.lastModified() }
@@ -110,6 +111,7 @@ class GalleryViewModel(
             val folder = File(album.canonicalPath)
             if (!folder.isDirectory || !folder.canRead()) return@launch
             val files = folder.walkTopDown()
+                .onEnter { it.name != ".personal-gallery" }
                 .filter { it.isFile && it.extension.lowercase() in SUPPORTED_EXTENSIONS }
                 .sortedWith(
                     compareByDescending<File> { it.lastModified() }
