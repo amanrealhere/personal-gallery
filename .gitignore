@@ -1,0 +1,27 @@
+# Gradle
+.gradle/
+**/build/
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+local.properties
+
+# Kotlin
+.kotlin/
+
+# Native build outputs
+.externalNativeBuild/
+.cxx/
+
+# Android-generated files
+captures/
+*.apk
+*.aab
+
+# Operating system
+.DS_Store
+Thumbs.db
+
+# Signing keystores are intentionally NOT ignored.
+# The project will track its release keystore as explicitly requested.

@@ -1,0 +1,119 @@
+name: Manual Android Release
+
+run-name: ${{ inputs.run_name || 'Manual release validation' }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_name:
+        description: 'GitHub Actions run display name'
+        required: true
+        type: string
+
+      release_title:
+        description: 'GitHub Release title'
+        required: true
+        type: string
+
+      release_tag:
+        description: 'Release tag (app-SHORTSHA)'
+        required: true
+        type: string
+
+      build_date:
+        description: 'Build date (YYYY-MM-DD)'
+        required: true
+        type: string
+
+      release_notes:
+        description: 'GitHub Release description'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate release request
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Validate selected branch
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ "$GITHUB_REF" != "refs/heads/main" ]]; then
+            echo "::error::Release builds are permitted only from main."
+            echo "Selected ref: $GITHUB_REF"
+            exit 1
+          fi
+
+          echo "Selected branch: main"
+
+      - name: Validate release metadata
+        shell: bash
+        env:
+          INPUT_RUN_NAME: ${{ inputs.run_name }}
+          INPUT_RELEASE_TITLE: ${{ inputs.release_title }}
+          INPUT_RELEASE_TAG: ${{ inputs.release_tag }}
+          INPUT_BUILD_DATE: ${{ inputs.build_date }}
+          INPUT_RELEASE_NOTES: ${{ inputs.release_notes }}
+        run: |
+          set -euo pipefail
+
+          [[ -n "${INPUT_RUN_NAME//[[:space:]]/}" ]] || {
+            echo "::error::run_name cannot be empty."
+            exit 1
+          }
+
+          [[ -n "${INPUT_RELEASE_TITLE//[[:space:]]/}" ]] || {
+            echo "::error::release_title cannot be empty."
+            exit 1
+          }
+
+          [[ -n "${INPUT_RELEASE_NOTES//[[:space:]]/}" ]] || {
+            echo "::error::release_notes cannot be empty."
+            exit 1
+          }
+
+          if [[ ! "$INPUT_RELEASE_TAG" =~ ^app-([0-9a-f]{7})$ ]]; then
+            echo "::error::release_tag must follow app-SHORTSHA using seven lowercase hexadecimal characters."
+            exit 1
+          fi
+
+          EXPECTED_TAG="app-${GITHUB_SHA:0:7}"
+
+          if [[ "$INPUT_RELEASE_TAG" != "$EXPECTED_TAG" ]]; then
+            echo "::error::Release tag does not match the selected commit."
+            echo "Expected: $EXPECTED_TAG"
+            echo "Received: $INPUT_RELEASE_TAG"
+            exit 1
+          fi
+
+          python3 - "$INPUT_BUILD_DATE" <<'PY'
+          from datetime import date
+          import sys
+
+          value = sys.argv[1]
+
+          try:
+              parsed = date.fromisoformat(value)
+          except ValueError:
+              print("::error::build_date must be a valid YYYY-MM-DD date.")
+              sys.exit(1)
+
+          if parsed.isoformat() != value:
+              print("::error::build_date must use YYYY-MM-DD format.")
+              sys.exit(1)
+
+          print(f"Build date: {value}")
+          PY
+
+          echo "Release title: $INPUT_RELEASE_TITLE"
+          echo "Release tag: $INPUT_RELEASE_TAG"
+          echo "Short SHA: ${GITHUB_SHA:0:7}"
+          echo "Full SHA: $GITHUB_SHA"
+
+          echo "Release metadata validation successful."
