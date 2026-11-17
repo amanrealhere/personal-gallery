@@ -27,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.foundation.layout.size
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.amanrealhere.personalgallery.R
 import com.amanrealhere.personalgallery.domain.model.Album
 
 @Composable

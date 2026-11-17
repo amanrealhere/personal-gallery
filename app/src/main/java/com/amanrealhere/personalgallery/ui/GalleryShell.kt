@@ -80,7 +80,9 @@ fun GalleryShell(
                     sidebarExpanded = sidebarExpanded,
                     albums = albums,
                     selectedAlbumPath = selectedAlbumPath,
-                    isAlbumsOverviewSelected = selectedAlbumPath == null,
+                    isAlbumsOverviewSelected =
+                        destination == GalleryDestination.Albums &&
+                            selectedAlbumPath == null,
                     isAddAlbumSelected = destination == GalleryDestination.AddAlbum,
                     onToggleSidebar = {
                         sidebarExpanded = !sidebarExpanded
