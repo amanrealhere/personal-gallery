@@ -51,7 +51,9 @@ abstract class GalleryDatabase : RoomDatabase() {
 
         private fun migratePrivateDatabaseIfNeeded(context: Context, destination: File) {
             val privateDatabase = context.getDatabasePath("personal-gallery.db")
-            if (destination.exists() || !privateDatabase.exists()) return
+            if (destination.exists() && destination.length() > 0L) return
+            if (destination.exists()) deleteSqliteArtifacts(destination)
+            if (!privateDatabase.exists()) return
 
             val legacy = Room.databaseBuilder(
                 context,
@@ -67,7 +69,7 @@ abstract class GalleryDatabase : RoomDatabase() {
                 }
 
                 val temporary = File(destination.parentFile, "personal-gallery.db.migrating")
-                if (temporary.exists()) temporary.delete()
+                deleteSqliteArtifacts(temporary)
 
                 val migrated = Room.databaseBuilder(
                     context,
@@ -85,11 +87,29 @@ abstract class GalleryDatabase : RoomDatabase() {
                     migrated.close()
                 }
 
+                check(temporary.isFile && temporary.length() > 0L) {
+                    "The migrated database file was not created."
+                }
                 check(temporary.renameTo(destination)) {
                     "Could not move migrated database into Pictures/.personal-gallery/database."
                 }
             } finally {
                 legacy.close()
+            }
+        }
+
+        private fun deleteSqliteArtifacts(databaseFile: File) {
+            listOf(
+                databaseFile,
+                File(databaseFile.absolutePath + "-wal"),
+                File(databaseFile.absolutePath + "-shm"),
+                File(databaseFile.absolutePath + "-journal")
+            ).forEach { artifact ->
+                if (artifact.exists()) {
+                    check(artifact.delete()) {
+                        "Could not remove an incomplete database migration file: $artifact"
+                    }
+                }
             }
         }
     }
