@@ -9,6 +9,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
@@ -32,6 +33,11 @@ fun ThumbnailPreview(
             val file = File(path)
             if (file.isFile) BitmapFactory.decodeFile(file.absolutePath) else null
         }
+    }
+
+    DisposableEffect(bitmapState.value) {
+        val current = bitmapState.value
+        onDispose { current?.recycle() }
     }
 
     Surface(

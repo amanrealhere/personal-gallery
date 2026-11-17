@@ -1,50 +1,113 @@
 package com.amanrealhere.personalgallery.ui
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.work.WorkInfo
+import com.amanrealhere.personalgallery.data.storage.GalleryStorage
 import com.amanrealhere.personalgallery.domain.model.Album
 import com.amanrealhere.personalgallery.ui.screens.addalbum.AddAlbumScreen
+import com.amanrealhere.personalgallery.ui.screens.album.AlbumContentsScreen
 import com.amanrealhere.personalgallery.ui.screens.home.HomeScreen
+import java.io.File
 
-private enum class GalleryDestination {
-    Albums,
-    AddAlbum
-}
+private enum class GalleryDestination { Albums, AddAlbum }
 
 @Composable
-fun GalleryShell(
-    viewModel: GalleryViewModel
-) {
+fun GalleryShell(viewModel: GalleryViewModel) {
+    val context = LocalContext.current
     var sidebarExpanded by remember { mutableStateOf(true) }
     var selectedAlbumPath by remember { mutableStateOf<String?>(null) }
-    var destination by remember {
-        mutableStateOf(GalleryDestination.Albums)
-    }
+    var destination by remember { mutableStateOf(GalleryDestination.Albums) }
+    val pendingGeneration = remember { mutableStateOf<(() -> Unit)?>(null) }
 
     val albums by viewModel.albums.collectAsStateWithLifecycle()
+    val thumbnailStates by viewModel.thumbnailStates.collectAsStateWithLifecycle()
+    val images by viewModel.albumImages.collectAsStateWithLifecycle()
+    val workInfos by viewModel.thumbnailWorkInfos.collectAsStateWithLifecycle(initialValue = emptyList())
 
     val selectedAlbum = remember(albums, selectedAlbumPath) {
-        albums.firstOrNull {
-            it.canonicalPath == selectedAlbumPath
+        albums.firstOrNull { it.canonicalPath == selectedAlbumPath }
+    }
+    val selectedState = thumbnailStates.firstOrNull { it.albumId == selectedAlbum?.id }
+    val activeWork = workInfos.firstOrNull { !it.state.isFinished }
+    val isGenerating = activeWork != null
+    val progressMessage = activeWork?.let { work ->
+        val processed = work.progress.getInt(
+            com.amanrealhere.personalgallery.data.thumbnail.ThumbnailGenerationWorker.KEY_PROGRESS_PROCESSED,
+            0
+        )
+        val total = work.progress.getInt(
+            com.amanrealhere.personalgallery.data.thumbnail.ThumbnailGenerationWorker.KEY_PROGRESS_TOTAL,
+            0
+        )
+        val failures = work.progress.getInt(
+            com.amanrealhere.personalgallery.data.thumbnail.ThumbnailGenerationWorker.KEY_PROGRESS_FAILURES,
+            0
+        )
+        when (work.state) {
+            WorkInfo.State.ENQUEUED -> "Thumbnail generation is queued"
+            WorkInfo.State.RUNNING -> "Generating thumbnails: $processed / $total · $failures failures"
+            else -> "Thumbnail generation"
+        }
+    }
+
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) {
+        pendingGeneration.value?.invoke()
+        pendingGeneration.value = null
+    }
+
+    fun startGeneration(action: () -> Unit) {
+        if (Build.VERSION.SDK_INT >= 33 &&
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.POST_NOTIFICATIONS
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            val marker = File(
+                GalleryStorage.getInstance(context).root,
+                ".notification-permission-requested"
+            )
+            if (!marker.exists()) {
+                marker.createNewFile()
+                pendingGeneration.value = action
+                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                return
+            }
+        }
+        action()
+    }
+
+    LaunchedEffect(selectedAlbum?.id) {
+        if (selectedAlbum == null) {
+            viewModel.clearAlbumImages()
+        } else {
+            viewModel.loadAlbumImages(selectedAlbum)
+            viewModel.ensureAlbumThumbnails(selectedAlbum.id)
         }
     }
 
@@ -54,8 +117,7 @@ fun GalleryShell(
     )
 
     BackHandler(
-        enabled = destination == GalleryDestination.AddAlbum ||
-            selectedAlbumPath != null
+        enabled = destination == GalleryDestination.AddAlbum || selectedAlbumPath != null
     ) {
         if (destination == GalleryDestination.AddAlbum) {
             destination = GalleryDestination.Albums
@@ -64,36 +126,21 @@ fun GalleryShell(
         }
     }
 
-    Surface(
-        modifier = Modifier.fillMaxSize(),
-        color = MaterialTheme.colorScheme.background
-    ) {
-        androidx.compose.foundation.layout.Row(
-            modifier = Modifier.fillMaxSize()
-        ) {
-            Box(
-                modifier = Modifier
-                    .width(sidebarWidth)
-                    .fillMaxHeight()
-            ) {
+    Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+        androidx.compose.foundation.layout.Row(Modifier.fillMaxSize()) {
+            Box(Modifier.width(sidebarWidth).fillMaxHeight()) {
                 AlbumsSidebar(
                     sidebarExpanded = sidebarExpanded,
                     albums = albums,
                     selectedAlbumPath = selectedAlbumPath,
-                    isAlbumsOverviewSelected =
-                        destination == GalleryDestination.Albums &&
-                            selectedAlbumPath == null,
+                    isAlbumsOverviewSelected = destination == GalleryDestination.Albums && selectedAlbumPath == null,
                     isAddAlbumSelected = destination == GalleryDestination.AddAlbum,
-                    onToggleSidebar = {
-                        sidebarExpanded = !sidebarExpanded
-                    },
+                    onToggleSidebar = { sidebarExpanded = !sidebarExpanded },
                     onAlbumsClick = {
                         destination = GalleryDestination.Albums
                         selectedAlbumPath = null
                     },
-                    onAddAlbumClick = {
-                        destination = GalleryDestination.AddAlbum
-                    },
+                    onAddAlbumClick = { destination = GalleryDestination.AddAlbum },
                     onAlbumClick = { album: Album ->
                         selectedAlbumPath = album.canonicalPath
                         destination = GalleryDestination.Albums
@@ -101,62 +148,44 @@ fun GalleryShell(
                 )
             }
 
-            Spacer(
-                modifier = Modifier
-                    .width(1.dp)
-                    .fillMaxHeight()
-            )
+            Spacer(Modifier.width(1.dp).fillMaxHeight())
 
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight()
-            ) {
+            Box(Modifier.weight(1f).fillMaxHeight()) {
                 when (destination) {
                     GalleryDestination.Albums -> {
                         if (selectedAlbum == null) {
                             HomeScreen(
                                 albums = albums,
-                                onAlbumClick = { album ->
-                                    selectedAlbumPath = album.canonicalPath
-                                },
-                                onAddAlbumClick = {
-                                    destination = GalleryDestination.AddAlbum
+                                thumbnailStates = thumbnailStates,
+                                isGenerating = isGenerating,
+                                progressMessage = progressMessage,
+                                onAlbumClick = { selectedAlbumPath = it.canonicalPath },
+                                onAddAlbumClick = { destination = GalleryDestination.AddAlbum },
+                                onRegenerateAll = {
+                                    startGeneration { viewModel.regenerateAllThumbnails() }
                                 }
                             )
                         } else {
-                            Surface(
-                                modifier = Modifier.fillMaxSize(),
-                                color = MaterialTheme.colorScheme.background
-                            ) {
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .padding(32.dp)
-                                ) {
-                                    Text(
-                                        text = selectedAlbum.name,
-                                        style = MaterialTheme.typography.headlineMedium,
-                                        color = MaterialTheme.colorScheme.onBackground
-                                    )
-
-                                    Spacer(Modifier.height(8.dp))
-
-                                    Text(
-                                        text = selectedAlbum.canonicalPath,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-
-                                    Spacer(Modifier.height(24.dp))
-
-                                    Text(
-                                        text = "Image indexing will be implemented next.",
-                                        style = MaterialTheme.typography.bodyLarge,
-                                        color = MaterialTheme.colorScheme.onBackground
-                                    )
-                                }
+                            val regularDirectory = selectedState?.activeGenerationId?.let { generationId ->
+                                File(
+                                    GalleryStorage.getInstance(context)
+                                        .albumThumbnailDirectory(generationId, selectedAlbum.id),
+                                    "regular"
+                                ).absolutePath
                             }
+                            AlbumContentsScreen(
+                                album = selectedAlbum,
+                                images = images,
+                                coverPath = selectedState?.coverThumbnailPath,
+                                regularThumbnailDirectory = regularDirectory,
+                                progressMessage = progressMessage,
+                                isLoading = isGenerating,
+                                onRegenerate = {
+                                    startGeneration {
+                                        viewModel.regenerateAlbumThumbnails(selectedAlbum.id)
+                                    }
+                                }
+                            )
                         }
                     }
 

@@ -35,30 +35,28 @@ fun AlbumContentsScreen(
     album: Album,
     images: List<File>,
     coverPath: String?,
+    regularThumbnailDirectory: String?,
     progressMessage: String?,
     isLoading: Boolean,
     onRegenerate: () -> Unit
 ) {
-    Surface(
-        modifier = Modifier.fillMaxSize(),
-        color = MaterialTheme.colorScheme.background
-    ) {
+    Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(Modifier.fillMaxSize()) {
             Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 28.dp, vertical = 22.dp),
+                Modifier.fillMaxWidth().padding(horizontal = 28.dp, vertical = 22.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Column(Modifier.weight(1f)) {
                     Text(
-                        text = album.name,
+                        album.name,
                         style = MaterialTheme.typography.headlineMedium,
                         color = MaterialTheme.colorScheme.onBackground,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
                     Text(
-                        text = "${images.size} ${if (images.size == 1) "image" else "images"}",
+                        "${images.size} ${if (images.size == 1) "image" else "images"}",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -70,12 +68,12 @@ fun AlbumContentsScreen(
 
             if (progressMessage != null) {
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 28.dp, vertical = 8.dp),
+                    Modifier.fillMaxWidth().padding(horizontal = 28.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     CircularProgressIndicator(modifier = Modifier.height(18.dp), strokeWidth = 2.dp)
                     Text(
-                        text = progressMessage,
+                        progressMessage,
                         modifier = Modifier.padding(start = 12.dp),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -88,7 +86,7 @@ fun AlbumContentsScreen(
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         ThumbnailPreview(
                             path = coverPath,
-                            modifier = Modifier.height(120.dp).fillMaxWidth(0.35f)
+                            modifier = Modifier.fillMaxWidth(0.35f).height(120.dp)
                         )
                         Spacer(Modifier.height(16.dp))
                         Text(
@@ -106,14 +104,10 @@ fun AlbumContentsScreen(
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    items(items = images, key = { it.absolutePath }) { file ->
-                        val thumbnail = File(
-                            File(
-                                File(coverPath.orEmpty()).parentFile?.parentFile,
-                                "regular"
-                            ),
-                            file.name + ".jpg"
-                        )
+                    items(images, key = { it.absolutePath }) { file ->
+                        val thumbnail = regularThumbnailDirectory?.let {
+                            File(it, file.name + ".jpg")
+                        }
                         Card(
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(12.dp),
@@ -123,11 +117,11 @@ fun AlbumContentsScreen(
                         ) {
                             Column {
                                 ThumbnailPreview(
-                                    path = thumbnail.takeIf { it.isFile }?.absolutePath,
+                                    path = thumbnail?.takeIf { it.isFile }?.absolutePath,
                                     modifier = Modifier.fillMaxWidth().height(148.dp)
                                 )
                                 Text(
-                                    text = file.name,
+                                    file.name,
                                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
                                     style = MaterialTheme.typography.labelMedium,
                                     color = MaterialTheme.colorScheme.onSurface,
