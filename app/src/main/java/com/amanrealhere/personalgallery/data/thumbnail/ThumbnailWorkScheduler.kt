@@ -8,7 +8,7 @@ import androidx.work.WorkManager
 import androidx.work.workDataOf
 
 object ThumbnailWorkScheduler {
-    private const val UNIQUE_WORK_NAME = "personal-gallery-thumbnail-generation"
+    const val UNIQUE_WORK_NAME = "personal-gallery-thumbnail-generation"
 
     fun enqueueAll(context: Context, force: Boolean = false) {
         val request = OneTimeWorkRequestBuilder<ThumbnailGenerationWorker>()

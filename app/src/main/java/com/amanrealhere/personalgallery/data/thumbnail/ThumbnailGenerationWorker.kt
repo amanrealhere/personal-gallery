@@ -72,7 +72,11 @@ class ThumbnailGenerationWorker(
         val albumFiles = albums.map { album ->
             album to discoverImages(File(album.canonicalPath))
         }
-        val total = albumFiles.sumOf { (_, images) -> images.size + if (images.isNotEmpty()) 1 else 0 }
+        val total = albumFiles.sumOf { (album, images) ->
+            images.size + if (images.isNotEmpty()) 1 else if (!File(album.canonicalPath).isDirectory) 1 else 0
+        }
+        val pendingStates = mutableListOf<AlbumThumbnailStateEntity>()
+        val pendingRecords = ArrayList<ThumbnailRecordEntity>(64)
         dao.setTotal(generationId, total)
         setProgress(workDataOfProgress(0, total, 0))
 
@@ -113,7 +117,7 @@ class ThumbnailGenerationWorker(
                         oldGenerationId = oldGeneration,
                         force = force
                     )
-                    dao.insertRecords(listOf(record))
+                    pendingRecords.add(record)
                     if (record.status == STATUS_SUCCESS || record.status == STATUS_REUSED) successes++ else failures++
                     processed++
                     if (index == 0) {
@@ -129,7 +133,7 @@ class ThumbnailGenerationWorker(
                             oldGenerationId = oldGeneration,
                             force = force
                         )
-                        dao.insertRecords(listOf(coverRecord))
+                        pendingRecords.add(coverRecord)
                         latestCoverPath = if (coverRecord.status == STATUS_SUCCESS ||
                             coverRecord.status == STATUS_REUSED
                         ) coverRecord.outputPath else null
@@ -137,6 +141,10 @@ class ThumbnailGenerationWorker(
                             coverRecord.status == STATUS_REUSED
                         ) successes++ else failures++
                         processed++
+                    }
+                    if (pendingRecords.size >= 64) {
+                        dao.insertRecords(pendingRecords.toList())
+                        pendingRecords.clear()
                     }
                     if (processed % 8 == 0 || processed == total) {
                         dao.updateProgress(generationId, processed, successes, failures)
@@ -152,7 +160,7 @@ class ThumbnailGenerationWorker(
                     }
                 }
 
-                dao.setAlbumState(
+                pendingStates.add(
                     AlbumThumbnailStateEntity(
                         albumId = album.id,
                         activeGenerationId = generationId,
@@ -163,6 +171,11 @@ class ThumbnailGenerationWorker(
                 )
             }
 
+            if (pendingRecords.isNotEmpty()) {
+                dao.insertRecords(pendingRecords)
+            }
+            // Switch every affected album only after the whole generation is complete.
+            pendingStates.forEach { dao.setAlbumState(it) }
             dao.updateProgress(generationId, processed, successes, failures)
             dao.finishGeneration(
                 generationId,
