@@ -78,16 +78,17 @@ class GalleryViewModel(
     fun loadAlbumImages(album: Album) {
         viewModelScope.launch(Dispatchers.IO) {
             val folder = File(album.canonicalPath)
-            val files = folder.listFiles()?.asSequence()
-                ?.filter {
-                    it.isFile && it.extension.lowercase() in SUPPORTED_EXTENSIONS
-                }
-                ?.sortedWith(
-                    compareByDescending<File> { it.lastModified() }
-                        .thenBy { it.absolutePath }
-                )
-                ?.toList()
-                .orEmpty()
+            val files = if (!folder.isDirectory || !folder.canRead()) {
+                emptyList()
+            } else {
+                folder.walkTopDown()
+                    .filter { it.isFile && it.extension.lowercase() in SUPPORTED_EXTENSIONS }
+                    .sortedWith(
+                        compareByDescending<File> { it.lastModified() }
+                            .thenBy { it.absolutePath }
+                    )
+                    .toList()
+            }
             _albumImages.value = files
         }
     }
@@ -107,8 +108,8 @@ class GalleryViewModel(
 
             val album = database.albumDao().findById(albumId) ?: return@launch
             val folder = File(album.canonicalPath)
-            val listed = folder.listFiles() ?: return@launch
-            val files = listed.asSequence()
+            if (!folder.isDirectory || !folder.canRead()) return@launch
+            val files = folder.walkTopDown()
                 .filter { it.isFile && it.extension.lowercase() in SUPPORTED_EXTENSIONS }
                 .sortedWith(
                     compareByDescending<File> { it.lastModified() }

@@ -106,7 +106,8 @@ fun AlbumContentsScreen(
                 ) {
                     items(images, key = { it.absolutePath }) { file ->
                         val thumbnail = regularThumbnailDirectory?.let {
-                            File(it, file.name + ".jpg")
+                            val relativePath = file.relativeTo(File(album.canonicalPath)).path
+                            File(it, relativePath + ".jpg")
                         }
                         Card(
                             modifier = Modifier.fillMaxWidth(),

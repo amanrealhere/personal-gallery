@@ -112,7 +112,8 @@ class ThumbnailGenerationWorker(
 
                 for ((index, source) in images.withIndex()) {
                     if (isStopped) throw CancellationException("Generation stopped")
-                    val output = File(regularDirectory, source.name + ".jpg")
+                    val relativeSourcePath = source.relativeTo(albumRoot).path
+                    val output = File(regularDirectory, relativeSourcePath + ".jpg")
                     val record = createThumbnailRecord(
                         source = source,
                         destination = output,
@@ -386,14 +387,17 @@ class ThumbnailGenerationWorker(
     }
 
     private fun discoverImages(folder: File): List<File> =
-        folder.listFiles()?.asSequence()
-            ?.filter { it.isFile && it.extension.lowercase() in SUPPORTED_EXTENSIONS }
-            ?.sortedWith(
-                compareByDescending<File> { it.lastModified() }
-                    .thenBy { it.absolutePath }
-            )
-            ?.toList()
-            .orEmpty()
+        if (!folder.isDirectory || !folder.canRead()) {
+            emptyList()
+        } else {
+            folder.walkTopDown()
+                .filter { it.isFile && it.extension.lowercase() in SUPPORTED_EXTENSIONS }
+                .sortedWith(
+                    compareByDescending<File> { it.lastModified() }
+                        .thenBy { it.absolutePath }
+                )
+                .toList()
+        }
 
     private fun createForegroundInfo(
         message: String,
