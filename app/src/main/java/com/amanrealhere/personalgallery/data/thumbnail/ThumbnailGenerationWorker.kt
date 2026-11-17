@@ -151,7 +151,7 @@ class ThumbnailGenerationWorker(
                         dao.insertRecords(pendingRecords.toList())
                         pendingRecords.clear()
                     }
-                    if (processed % 25 == 0 || processed == total) {
+                    if (processed % 100 == 0 || processed == total) {
                         dao.updateProgress(generationId, processed, successes, failures)
                         setProgress(workDataOfProgress(processed, total, failures))
                         setForeground(
@@ -237,20 +237,22 @@ class ThumbnailGenerationWorker(
                 old.sourceName == metadata.name &&
                 old.sourceSizeBytes == metadata.size &&
                 old.sourceModifiedAtEpochMillis == metadata.modified &&
-                File(old.outputPath).isFile && File(old.outputPath).length() > 0L
+                isValidThumbnail(File(old.outputPath))
             ) {
+                val temporary = File(destination.parentFile, destination.name + ".tmp")
                 return try {
                     destination.parentFile?.mkdirs()
-                    val temporary = File(destination.parentFile, destination.name + ".tmp")
+                    temporary.delete()
                     File(old.outputPath).inputStream().use { input ->
                         FileOutputStream(temporary).use { output -> input.copyTo(output) }
                     }
-                    if (!temporary.renameTo(destination)) {
-                        temporary.delete()
-                        throw IllegalStateException("Could not atomically place cached thumbnail")
+                    check(isValidThumbnail(temporary)) { "Cached thumbnail copy is invalid" }
+                    check(temporary.renameTo(destination)) {
+                        "Could not atomically place cached thumbnail"
                     }
                     metadata.toRecord(generationId, albumId, source, kind, destination, STATUS_REUSED)
                 } catch (exception: Exception) {
+                    temporary.delete()
                     renderRecord(source, destination, albumId, generationId, kind, size, quality, metadata, exception)
                 }
             }
@@ -270,9 +272,9 @@ class ThumbnailGenerationWorker(
         metadata: SourceMetadata,
         previousError: Exception?
     ): ThumbnailRecordEntity {
+        val temporary = File(destination.parentFile, destination.name + ".tmp")
         return try {
             destination.parentFile?.mkdirs()
-            val temporary = File(destination.parentFile, destination.name + ".tmp")
             temporary.delete()
             val bitmap = decodeThumbnail(source, size)
                 ?: throw IllegalArgumentException("Unsupported or unreadable image")
@@ -296,6 +298,7 @@ class ThumbnailGenerationWorker(
             }
             metadata.toRecord(generationId, albumId, source, kind, destination, STATUS_SUCCESS)
         } catch (exception: Exception) {
+            temporary.delete()
             destination.delete()
             metadata.toRecord(
                 generationId, albumId, source, kind, destination,
@@ -371,6 +374,13 @@ class ThumbnailGenerationWorker(
             else -> return bitmap
         }
         return Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+    }
+
+    private fun isValidThumbnail(file: File): Boolean {
+        if (!file.isFile || file.length() <= 0L) return false
+        val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(file.absolutePath, options)
+        return options.outWidth == REGULAR_SIZE || options.outWidth == COVER_SIZE
     }
 
     private fun discoverImages(folder: File): List<File> =
