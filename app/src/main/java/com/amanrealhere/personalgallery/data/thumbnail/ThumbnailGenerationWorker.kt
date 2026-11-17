@@ -109,6 +109,11 @@ class ThumbnailGenerationWorker(
 
                 val oldState = dao.albumState(album.id)
                 val oldGeneration = oldState?.activeGenerationId
+                val oldRecordsByKey = if (!force && oldGeneration != null) {
+                    dao.records(oldGeneration, album.id).associateBy { it.sourcePath to it.kind }
+                } else {
+                    emptyMap()
+                }
                 var latestCoverPath: String? = null
                 var albumFailures = 0
 
@@ -124,7 +129,7 @@ class ThumbnailGenerationWorker(
                         kind = KIND_REGULAR,
                         size = REGULAR_SIZE,
                         quality = REGULAR_QUALITY,
-                        oldGenerationId = oldGeneration,
+                        oldRecord = oldRecordsByKey[source.absolutePath to KIND_REGULAR],
                         force = force
                     )
                     pendingRecords.add(record)
@@ -145,7 +150,7 @@ class ThumbnailGenerationWorker(
                             kind = KIND_COVER,
                             size = COVER_SIZE,
                             quality = COVER_QUALITY,
-                            oldGenerationId = oldGeneration,
+                            oldRecord = oldRecordsByKey[source.absolutePath to KIND_COVER],
                             force = force
                         )
                         pendingRecords.add(coverRecord)
@@ -225,7 +230,7 @@ class ThumbnailGenerationWorker(
         }
     }
 
-    private suspend fun createThumbnailRecord(
+    private fun createThumbnailRecord(
         source: File,
         destination: File,
         albumId: String,
@@ -233,7 +238,7 @@ class ThumbnailGenerationWorker(
         kind: String,
         size: Int,
         quality: Int,
-        oldGenerationId: String?,
+        oldRecord: ThumbnailRecordEntity?,
         force: Boolean
     ): ThumbnailRecordEntity {
         val canonical = try {
@@ -248,26 +253,19 @@ class ThumbnailGenerationWorker(
             modified = source.lastModified()
         )
 
-        if (!force && oldGenerationId != null) {
-            val old = database.thumbnailDao().findRecord(
-                oldGenerationId,
-                albumId,
-                source.absolutePath,
-                kind
-            )
-            if (old != null &&
-                old.status in setOf(STATUS_SUCCESS, STATUS_REUSED) &&
-                old.sourceCanonicalPath == metadata.canonicalPath &&
-                old.sourceName == metadata.name &&
-                old.sourceSizeBytes == metadata.size &&
-                old.sourceModifiedAtEpochMillis == metadata.modified &&
-                isValidThumbnail(File(old.outputPath), size)
-            ) {
-                val temporary = File(destination.parentFile, destination.name + ".tmp")
-                return try {
-                    destination.parentFile?.mkdirs()
-                    temporary.delete()
-                    File(old.outputPath).inputStream().use { input ->
+        if (!force && oldRecord != null &&
+            oldRecord.status in setOf(STATUS_SUCCESS, STATUS_REUSED) &&
+            oldRecord.sourceCanonicalPath == metadata.canonicalPath &&
+            oldRecord.sourceName == metadata.name &&
+            oldRecord.sourceSizeBytes == metadata.size &&
+            oldRecord.sourceModifiedAtEpochMillis == metadata.modified &&
+            isValidThumbnail(File(oldRecord.outputPath), size)
+        ) {
+            val temporary = File(destination.parentFile, destination.name + ".tmp")
+            return try {
+                destination.parentFile?.mkdirs()
+                temporary.delete()
+                File(oldRecord.outputPath).inputStream().use { input ->
                         FileOutputStream(temporary).use { output -> input.copyTo(output) }
                     }
                     check(isValidThumbnail(temporary, size)) { "Cached thumbnail copy is invalid" }
