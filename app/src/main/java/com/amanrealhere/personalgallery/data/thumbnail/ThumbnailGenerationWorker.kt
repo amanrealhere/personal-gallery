@@ -109,6 +109,7 @@ class ThumbnailGenerationWorker(
                 val oldState = dao.albumState(album.id)
                 val oldGeneration = oldState?.activeGenerationId
                 var latestCoverPath: String? = null
+                var albumFailures = 0
 
                 for ((index, source) in images.withIndex()) {
                     if (isStopped) throw CancellationException("Generation stopped")
@@ -126,7 +127,12 @@ class ThumbnailGenerationWorker(
                         force = force
                     )
                     pendingRecords.add(record)
-                    if (record.status == STATUS_SUCCESS || record.status == STATUS_REUSED) successes++ else failures++
+                    if (record.status == STATUS_SUCCESS || record.status == STATUS_REUSED) {
+                        successes++
+                    } else {
+                        failures++
+                        albumFailures++
+                    }
                     processed++
                     if (index == 0) {
                         val coverOutput = File(coverDirectory, source.name + ".jpg")
@@ -147,7 +153,12 @@ class ThumbnailGenerationWorker(
                         ) coverRecord.outputPath else null
                         if (coverRecord.status == STATUS_SUCCESS ||
                             coverRecord.status == STATUS_REUSED
-                        ) successes++ else failures++
+                        ) {
+                            successes++
+                        } else {
+                            failures++
+                            albumFailures++
+                        }
                         processed++
                     }
                     if (pendingRecords.size >= 64) {
@@ -168,15 +179,18 @@ class ThumbnailGenerationWorker(
                     }
                 }
 
-                pendingStates.add(
-                    AlbumThumbnailStateEntity(
-                        albumId = album.id,
-                        activeGenerationId = generationId,
-                        coverThumbnailPath = latestCoverPath,
-                        imageCount = images.size,
-                        latestImageModifiedAtEpochMillis = images.firstOrNull()?.lastModified()
+                // Keep the previous complete album generation active if any item failed.
+                if (albumFailures == 0) {
+                    pendingStates.add(
+                        AlbumThumbnailStateEntity(
+                            albumId = album.id,
+                            activeGenerationId = generationId,
+                            coverThumbnailPath = latestCoverPath,
+                            imageCount = images.size,
+                            latestImageModifiedAtEpochMillis = images.firstOrNull()?.lastModified()
+                        )
                     )
-                )
+                }
             }
 
             if (pendingRecords.isNotEmpty()) {
