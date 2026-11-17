@@ -278,7 +278,8 @@ fun AddAlbumScreen(
 
                     Text(
                         text = "Choose the folder itself, not an individual image. " +
-                            "Subfolders will not be registered separately. " +
+                            "Images inside subfolders are included in this album; " +
+                            "subfolders will not be registered as separate albums. " +
                             "Original files will not be moved or modified.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
