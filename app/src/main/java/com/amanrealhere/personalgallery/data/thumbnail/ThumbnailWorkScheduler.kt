@@ -9,10 +9,13 @@ import androidx.work.workDataOf
 
 object ThumbnailWorkScheduler {
     const val UNIQUE_WORK_NAME = "personal-gallery-thumbnail-generation"
+    const val TAG_ALL = "personal-gallery-thumbnail-generation:all"
+    const val TAG_ALBUM_PREFIX = "personal-gallery-thumbnail-generation:album:"
 
     fun enqueueAll(context: Context, force: Boolean = false) {
         val request = OneTimeWorkRequestBuilder<ThumbnailGenerationWorker>()
             .setInputData(workDataOf(ThumbnailGenerationWorker.KEY_FORCE to force))
+            .addTag(TAG_ALL)
             .setConstraints(Constraints.Builder().build())
             .build()
         WorkManager.getInstance(context).enqueueUniqueWork(
@@ -30,6 +33,7 @@ object ThumbnailWorkScheduler {
                     ThumbnailGenerationWorker.KEY_FORCE to force
                 )
             )
+            .addTag(TAG_ALBUM_PREFIX + albumId)
             .setConstraints(Constraints.Builder().build())
             .build()
         WorkManager.getInstance(context).enqueueUniqueWork(

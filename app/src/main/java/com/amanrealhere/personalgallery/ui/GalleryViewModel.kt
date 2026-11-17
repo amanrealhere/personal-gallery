@@ -12,6 +12,7 @@ import com.amanrealhere.personalgallery.data.local.AlbumThumbnailStateEntity
 import com.amanrealhere.personalgallery.data.repository.AlbumRegistrationResult
 import com.amanrealhere.personalgallery.data.repository.AlbumRepository
 import com.amanrealhere.personalgallery.data.thumbnail.ThumbnailWorkScheduler
+import com.amanrealhere.personalgallery.data.thumbnail.ThumbnailGenerationWorker
 import com.amanrealhere.personalgallery.domain.model.Album
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -106,8 +107,8 @@ class GalleryViewModel(
                 .first()
             val alreadyCovered = pendingWorks.any { work ->
                 !work.state.isFinished && (
-                    work.inputData.getString(ThumbnailGenerationWorker.KEY_ALBUM_ID) == null ||
-                        work.inputData.getString(ThumbnailGenerationWorker.KEY_ALBUM_ID) == albumId
+                    ThumbnailWorkScheduler.TAG_ALL in work.tags ||
+                        ThumbnailWorkScheduler.TAG_ALBUM_PREFIX + albumId in work.tags
                     )
             }
             if (alreadyCovered) return@launch
