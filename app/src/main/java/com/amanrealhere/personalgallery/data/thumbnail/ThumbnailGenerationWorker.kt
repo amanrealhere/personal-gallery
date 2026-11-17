@@ -28,6 +28,9 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
 import java.util.UUID
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class ThumbnailGenerationWorker(
     appContext: Context,
@@ -49,7 +52,7 @@ class ThumbnailGenerationWorker(
             listOfNotNull(database.albumDao().findById(requestedAlbumId))
         }
 
-        val generationId = UUID.randomUUID().toString()
+        val generationId = SimpleDateFormat("yyyyMMdd-HHmmss-SSS", Locale.US).format(Date()) + "-" + UUID.randomUUID().toString().take(8)
         val now = System.currentTimeMillis()
         val dao = database.thumbnailDao()
         dao.insertGeneration(
