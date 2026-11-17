@@ -16,8 +16,8 @@ android {
         applicationId = "com.amanrealhere.personalgallery"
         minSdk = 34
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "2.0"
     }
 
     buildFeatures {
@@ -42,6 +42,9 @@ dependencies {
     implementation(libs.lifecycle.viewmodel.ktx)
     implementation(libs.lifecycle.viewmodel.compose)
     implementation(libs.lifecycle.runtime.compose)
+
+    implementation(libs.work.runtime.ktx)
+    implementation(libs.exifinterface)
 
     debugImplementation(libs.compose.ui.tooling)
 }
