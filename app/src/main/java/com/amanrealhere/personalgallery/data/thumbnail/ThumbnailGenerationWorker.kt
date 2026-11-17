@@ -266,21 +266,32 @@ class ThumbnailGenerationWorker(
                 destination.parentFile?.mkdirs()
                 temporary.delete()
                 File(oldRecord.outputPath).inputStream().use { input ->
-                        FileOutputStream(temporary).use { output -> input.copyTo(output) }
+                    FileOutputStream(temporary).use { output ->
+                        input.copyTo(output)
                     }
-                    check(isValidThumbnail(temporary, size)) { "Cached thumbnail copy is invalid" }
-                    check(temporary.renameTo(destination)) {
-                        "Could not atomically place cached thumbnail"
-                    }
-                    metadata.toRecord(generationId, albumId, source, kind, destination, STATUS_REUSED)
-                } catch (exception: Exception) {
-                    temporary.delete()
-                    renderRecord(source, destination, albumId, generationId, kind, size, quality, metadata, exception)
                 }
+                check(isValidThumbnail(temporary, size)) {
+                    "Cached thumbnail copy is invalid"
+                }
+                check(temporary.renameTo(destination)) {
+                    "Could not atomically place cached thumbnail"
+                }
+                metadata.toRecord(
+                    generationId, albumId, source, kind, destination, STATUS_REUSED
+                )
+            } catch (exception: Exception) {
+                temporary.delete()
+                renderRecord(
+                    source, destination, albumId, generationId, kind,
+                    size, quality, metadata, exception
+                )
             }
         }
 
-        return renderRecord(source, destination, albumId, generationId, kind, size, quality, metadata, null)
+        return renderRecord(
+            source, destination, albumId, generationId, kind,
+            size, quality, metadata, null
+        )
     }
 
     private fun renderRecord(
