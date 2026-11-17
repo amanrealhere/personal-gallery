@@ -367,7 +367,7 @@ private fun filesystemPathFromTreeUri(uri: Uri): String? {
         }.canonicalFile
 
         val selectedFolder = File(storageRoot, relativePath).canonicalFile
-        val rootPrefix = storageRoot.path.trimEnd(File.separator) + File.separator
+        val rootPrefix = storageRoot.path.trimEnd(File.separatorChar) + File.separator
 
         if (selectedFolder.path != storageRoot.path &&
             !selectedFolder.path.startsWith(rootPrefix)
