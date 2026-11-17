@@ -52,7 +52,8 @@ fun GalleryShell(viewModel: GalleryViewModel) {
         albums.firstOrNull { it.canonicalPath == selectedAlbumPath }
     }
     val selectedState = thumbnailStates.firstOrNull { it.albumId == selectedAlbum?.id }
-    val activeWork = workInfos.firstOrNull { !it.state.isFinished }
+    val activeWork = workInfos.firstOrNull { it.state == WorkInfo.State.RUNNING }
+        ?: workInfos.firstOrNull { !it.state.isFinished }
     val isGenerating = activeWork != null
     val progressMessage = activeWork?.let { work ->
         val processed = work.progress.getInt(
@@ -68,8 +69,10 @@ fun GalleryShell(viewModel: GalleryViewModel) {
             0
         )
         when (work.state) {
-            WorkInfo.State.ENQUEUED -> "Thumbnail generation is queued"
-            WorkInfo.State.RUNNING -> "Generating thumbnails: $processed / $total · $failures failures"
+            WorkInfo.State.ENQUEUED, WorkInfo.State.BLOCKED ->
+                "Thumbnail generation is queued"
+            WorkInfo.State.RUNNING ->
+                "Generating thumbnails: $processed / $total · $failures failures"
             else -> "Thumbnail generation"
         }
     }
