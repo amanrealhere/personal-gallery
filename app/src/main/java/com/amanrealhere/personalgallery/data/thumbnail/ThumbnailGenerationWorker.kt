@@ -73,7 +73,9 @@ class ThumbnailGenerationWorker(
             album to discoverImages(File(album.canonicalPath))
         }
         val total = albumFiles.sumOf { (album, images) ->
-            images.size + if (images.isNotEmpty()) 1 else if (!File(album.canonicalPath).isDirectory) 1 else 0
+            images.size + if (images.isNotEmpty()) 1 else if (
+                !File(album.canonicalPath).isDirectory || !File(album.canonicalPath).canRead()
+            ) 1 else 0
         }
         val pendingStates = mutableListOf<AlbumThumbnailStateEntity>()
         val pendingRecords = ArrayList<ThumbnailRecordEntity>(64)
@@ -146,7 +148,7 @@ class ThumbnailGenerationWorker(
                         dao.insertRecords(pendingRecords.toList())
                         pendingRecords.clear()
                     }
-                    if (processed % 8 == 0 || processed == total) {
+                    if (processed % 25 == 0 || processed == total) {
                         dao.updateProgress(generationId, processed, successes, failures)
                         setProgress(workDataOfProgress(processed, total, failures))
                         setForeground(
@@ -174,15 +176,16 @@ class ThumbnailGenerationWorker(
             if (pendingRecords.isNotEmpty()) {
                 dao.insertRecords(pendingRecords)
             }
-            // Switch every affected album only after the whole generation is complete.
-            pendingStates.forEach { dao.setAlbumState(it) }
             dao.updateProgress(generationId, processed, successes, failures)
-            dao.finishGeneration(
+            // Switch every affected album and mark the generation complete atomically.
+            dao.activateGeneration(
                 generationId,
                 if (failures == 0) STATUS_COMPLETE else STATUS_COMPLETE_WITH_ERRORS,
-                System.currentTimeMillis()
+                System.currentTimeMillis(),
+                pendingStates
             )
             setProgress(workDataOfProgress(processed, total, failures))
+            postCompletionNotification(processed, total, failures)
             Result.success()
         } catch (cancelled: CancellationException) {
             dao.finishGeneration(generationId, STATUS_INTERRUPTED, System.currentTimeMillis())
@@ -271,6 +274,10 @@ class ThumbnailGenerationWorker(
             val bitmap = decodeThumbnail(source, size)
                 ?: throw IllegalArgumentException("Unsupported or unreadable image")
             try {
+                check(source.isFile && source.length() == metadata.size &&
+                    source.lastModified() == metadata.modified) {
+                    "Source image changed while its thumbnail was being generated"
+                }
                 FileOutputStream(temporary).use { stream ->
                     check(bitmap.compress(Bitmap.CompressFormat.JPEG, quality, stream)) {
                         "JPEG encoding failed"
@@ -397,6 +404,21 @@ class ThumbnailGenerationWorker(
             notification,
             android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
         )
+    }
+
+    private fun postCompletionNotification(processed: Int, total: Int, failures: Int) {
+        val notification = NotificationCompat.Builder(applicationContext, CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.ic_menu_gallery)
+            .setContentTitle("Personal Gallery")
+            .setContentText(
+                if (failures == 0) "Thumbnail generation complete: $processed images"
+                else "Thumbnail generation finished with $failures failures"
+            )
+            .setAutoCancel(true)
+            .setOngoing(false)
+            .build()
+        applicationContext.getSystemService(NotificationManager::class.java)
+            .notify(NOTIFICATION_ID + 1, notification)
     }
 
     private fun createNotificationChannel() {

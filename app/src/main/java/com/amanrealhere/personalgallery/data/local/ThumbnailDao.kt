@@ -5,6 +5,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
+import androidx.room.Transaction
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -59,6 +60,20 @@ interface ThumbnailDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun setAlbumState(state: AlbumThumbnailStateEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun setAlbumStates(states: List<AlbumThumbnailStateEntity>)
+
+    @Transaction
+    suspend fun activateGeneration(
+        generationId: String,
+        status: String,
+        completedAt: Long,
+        states: List<AlbumThumbnailStateEntity>
+    ) {
+        setAlbumStates(states)
+        finishGeneration(generationId, status, completedAt)
+    }
 
     @Query("SELECT * FROM album_thumbnail_state WHERE albumId = :albumId LIMIT 1")
     suspend fun albumState(albumId: String): AlbumThumbnailStateEntity?
