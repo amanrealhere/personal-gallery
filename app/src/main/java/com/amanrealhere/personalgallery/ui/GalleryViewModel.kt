@@ -65,7 +65,7 @@ class GalleryViewModel(
     val albumImages: Flow<PagingData<MediaItemEntity>> = selectedAlbumId
         .flatMapLatest { albumId ->
             if (albumId == null) {
-                flowOf(PagingData.empty())
+                flowOf(PagingData.empty<MediaItemEntity>())
             } else {
                 Pager(
                     config = PagingConfig(
@@ -97,6 +97,7 @@ class GalleryViewModel(
     private val _isIndexingAlbum = MutableStateFlow(false)
     val isIndexingAlbum: StateFlow<Boolean> = _isIndexingAlbum.asStateFlow()
     private var indexingJob: Job? = null
+    private var indexingAlbumId: String? = null
 
     private val _registrationResult = MutableStateFlow<AlbumRegistrationResult?>(null)
     val registrationResult: StateFlow<AlbumRegistrationResult?> =
@@ -122,10 +123,12 @@ class GalleryViewModel(
     }
 
     fun loadAlbumImages(album: Album) {
+        if (indexingAlbumId == album.id && indexingJob?.isActive == true) return
         selectedAlbumId.value = album.id
         indexingJob?.cancel()
+        indexingAlbumId = album.id
+        _isIndexingAlbum.value = true
         indexingJob = viewModelScope.launch(Dispatchers.IO) {
-            _isIndexingAlbum.value = true
             try {
                 mediaIndexRepository.reconcileAlbum(
                     albumId = album.id,
@@ -141,6 +144,7 @@ class GalleryViewModel(
             } finally {
                 if (selectedAlbumId.value == album.id) {
                     _isIndexingAlbum.value = false
+                    indexingAlbumId = null
                 }
             }
         }
@@ -149,6 +153,7 @@ class GalleryViewModel(
     fun clearAlbumImages() {
         indexingJob?.cancel()
         indexingJob = null
+        indexingAlbumId = null
         _isIndexingAlbum.value = false
         selectedAlbumId.value = null
     }

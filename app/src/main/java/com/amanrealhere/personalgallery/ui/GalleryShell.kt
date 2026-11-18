@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -24,6 +25,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.work.WorkInfo
@@ -39,6 +43,7 @@ private enum class GalleryDestination { Albums, AddAlbum }
 @Composable
 fun GalleryShell(viewModel: GalleryViewModel) {
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     var sidebarExpanded by remember { mutableStateOf(true) }
     var selectedAlbumPath by remember { mutableStateOf<String?>(null) }
     var destination by remember { mutableStateOf(GalleryDestination.Albums) }
@@ -115,6 +120,16 @@ fun GalleryShell(viewModel: GalleryViewModel) {
         } else {
             viewModel.loadAlbumImages(selectedAlbum)
         }
+    }
+
+    DisposableEffect(lifecycleOwner, selectedAlbum?.id) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                selectedAlbum?.let(viewModel::loadAlbumImages)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     val sidebarWidth by animateDpAsState(
