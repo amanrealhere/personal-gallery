@@ -16,15 +16,17 @@ import java.io.File
         AlbumEntity::class,
         ThumbnailGenerationEntity::class,
         ThumbnailRecordEntity::class,
-        AlbumThumbnailStateEntity::class
+        AlbumThumbnailStateEntity::class,
+        MediaItemEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = true
 )
 abstract class GalleryDatabase : RoomDatabase() {
 
     abstract fun albumDao(): AlbumDao
     abstract fun thumbnailDao(): ThumbnailDao
+    abstract fun mediaItemDao(): MediaItemDao
 
     companion object {
         @Volatile private var INSTANCE: GalleryDatabase? = null
@@ -46,7 +48,7 @@ abstract class GalleryDatabase : RoomDatabase() {
                 context,
                 GalleryDatabase::class.java,
                 databaseFile.absolutePath
-            ).addMigrations(MIGRATION_1_2).build()
+            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3).build()
         }
 
         private fun migratePrivateDatabaseIfNeeded(context: Context, destination: File) {
@@ -75,7 +77,7 @@ abstract class GalleryDatabase : RoomDatabase() {
                     context,
                     GalleryDatabase::class.java,
                     temporary.absolutePath
-                ).addMigrations(MIGRATION_1_2).build()
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3).build()
 
                 try {
                     runBlocking {
@@ -167,6 +169,27 @@ private val MIGRATION_1_2 = object : androidx.room.migration.Migration(1, 2) {
                 imageCount INTEGER NOT NULL,
                 latestImageModifiedAtEpochMillis INTEGER
             )
+        """.trimIndent())
+    }
+}
+
+private val MIGRATION_2_3 = object : androidx.room.migration.Migration(2, 3) {
+    override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS media_items (
+                id TEXT NOT NULL PRIMARY KEY,
+                albumId TEXT NOT NULL,
+                sourcePath TEXT NOT NULL,
+                sourceCanonicalPath TEXT NOT NULL,
+                displayName TEXT NOT NULL,
+                fileSizeBytes INTEGER NOT NULL,
+                modifiedAtEpochMillis INTEGER NOT NULL,
+                lastSeenScanToken TEXT NOT NULL
+            )
+        """.trimIndent())
+        db.execSQL("""
+            CREATE INDEX IF NOT EXISTS index_media_items_albumId_modifiedAtEpochMillis_sourcePath
+            ON media_items(albumId, modifiedAtEpochMillis, sourcePath)
         """.trimIndent())
     }
 }

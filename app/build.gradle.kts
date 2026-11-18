@@ -35,6 +35,8 @@ dependencies {
     implementation(libs.compose.material3)
     implementation(libs.compose.material.icons.core)
     implementation(libs.coil.compose)
+    implementation(libs.paging.runtime)
+    implementation(libs.paging.compose)
 
     implementation(libs.room.runtime)
     implementation(libs.room.ktx)
