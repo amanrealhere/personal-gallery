@@ -28,6 +28,13 @@ interface MediaItemDao {
     @Query("DELETE FROM media_items WHERE albumId = :albumId")
     suspend fun deleteAlbumItems(albumId: String)
 
+    @Query("""
+        SELECT * FROM media_items
+        WHERE albumId = :albumId
+        ORDER BY modifiedAtEpochMillis DESC, sourcePath ASC
+    """)
+    suspend fun itemsForAlbum(albumId: String): List<MediaItemEntity>
+
     @Query("SELECT COUNT(*) FROM media_items WHERE albumId = :albumId")
     suspend fun countForAlbum(albumId: String): Int
 }

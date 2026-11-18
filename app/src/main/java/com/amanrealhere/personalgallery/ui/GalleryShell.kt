@@ -113,9 +113,6 @@ fun GalleryShell(viewModel: GalleryViewModel) {
             viewModel.clearAlbumImages()
         } else {
             viewModel.loadAlbumImages(selectedAlbum)
-            if (selectedState?.activeGenerationId == null) {
-                startGeneration { viewModel.ensureAlbumThumbnails(selectedAlbum.id) }
-            }
         }
     }
 

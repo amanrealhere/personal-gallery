@@ -119,6 +119,9 @@ class GalleryViewModel(
                     albumId = album.id,
                     folder = File(album.canonicalPath)
                 )
+                if (selectedAlbumId.value == album.id) {
+                    ensureAlbumThumbnailsNow(album.id)
+                }
             } catch (exception: CancellationException) {
                 throw exception
             } catch (_: Exception) {
@@ -140,6 +143,11 @@ class GalleryViewModel(
 
     fun ensureAlbumThumbnails(albumId: String) {
         viewModelScope.launch(Dispatchers.IO) {
+            ensureAlbumThumbnailsNow(albumId)
+        }
+    }
+
+    private suspend fun ensureAlbumThumbnailsNow(albumId: String) {
             val workManager = WorkManager.getInstance(getApplication<Application>())
             val pendingWorks = workManager
                 .getWorkInfosForUniqueWorkFlow(ThumbnailWorkScheduler.UNIQUE_WORK_NAME)
@@ -150,19 +158,13 @@ class GalleryViewModel(
                         ThumbnailWorkScheduler.TAG_ALBUM_PREFIX + albumId in work.tags
                     )
             }
-            if (alreadyCovered) return@launch
+            if (alreadyCovered) return
 
             val album = database.albumDao().findById(albumId) ?: return@launch
             val folder = File(album.canonicalPath)
-            if (!folder.isDirectory || !folder.canRead()) return@launch
-            val files = folder.walkTopDown()
-                .onEnter { it.name != ".personal-gallery" }
-                .filter { it.isFile && it.extension.lowercase() in SUPPORTED_EXTENSIONS }
-                .sortedWith(
-                    compareByDescending<File> { it.lastModified() }
-                        .thenBy { it.absolutePath }
-                )
-                .toList()
+            if (!folder.isDirectory || !folder.canRead()) return
+            val files = database.mediaItemDao().itemsForAlbum(albumId)
+                .map { File(it.sourcePath) }
 
             val state = database.thumbnailDao().albumState(albumId)
             val activeGenerationId = state?.activeGenerationId
