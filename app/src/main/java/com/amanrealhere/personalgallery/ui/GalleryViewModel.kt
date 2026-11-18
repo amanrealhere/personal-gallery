@@ -4,26 +4,34 @@ import android.app.Application
 import android.graphics.BitmapFactory
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.paging.Pager
+import androidx.paging.PagingConfig
+import androidx.paging.PagingData
+import androidx.paging.cachedIn
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
-import kotlinx.coroutines.flow.first
 import com.amanrealhere.personalgallery.PersonalGalleryApplication
 import com.amanrealhere.personalgallery.data.local.AlbumThumbnailStateEntity
+import com.amanrealhere.personalgallery.data.local.MediaItemEntity
 import com.amanrealhere.personalgallery.data.repository.AlbumRegistrationResult
 import com.amanrealhere.personalgallery.data.repository.AlbumRepository
-import com.amanrealhere.personalgallery.data.thumbnail.ThumbnailWorkScheduler
+import com.amanrealhere.personalgallery.data.repository.MediaIndexRepository
 import com.amanrealhere.personalgallery.data.thumbnail.ThumbnailGenerationWorker
+import com.amanrealhere.personalgallery.data.thumbnail.ThumbnailWorkScheduler
 import com.amanrealhere.personalgallery.domain.model.Album
+import java.io.File
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import java.io.File
 
 class GalleryViewModel(
     application: Application
@@ -32,6 +40,7 @@ class GalleryViewModel(
     private val galleryApplication = application as PersonalGalleryApplication
     private val database = galleryApplication.database
     private val repository = AlbumRepository(database.albumDao())
+    private val mediaIndexRepository = MediaIndexRepository(database.mediaItemDao())
 
     val albums: StateFlow<List<Album>> = repository.observeAlbums().stateIn(
         scope = viewModelScope,
@@ -50,8 +59,32 @@ class GalleryViewModel(
         WorkManager.getInstance(application)
             .getWorkInfosForUniqueWorkFlow(ThumbnailWorkScheduler.UNIQUE_WORK_NAME)
 
-    private val _albumImages = MutableStateFlow<List<File>>(emptyList())
-    val albumImages: StateFlow<List<File>> = _albumImages.asStateFlow()
+    private val selectedAlbumId = MutableStateFlow<String?>(null)
+
+    val albumImages: Flow<PagingData<MediaItemEntity>> = selectedAlbumId
+        .flatMapLatest { albumId ->
+            if (albumId == null) {
+                flowOf(PagingData.empty())
+            } else {
+                Pager(
+                    config = PagingConfig(
+                        pageSize = 60,
+                        initialLoadSize = 90,
+                        prefetchDistance = 30,
+                        enablePlaceholders = false,
+                        maxSize = 240
+                    ),
+                    pagingSourceFactory = {
+                        database.mediaItemDao().pagingSource(albumId)
+                    }
+                ).flow
+            }
+        }
+        .cachedIn(viewModelScope)
+
+    private val _isIndexingAlbum = MutableStateFlow(false)
+    val isIndexingAlbum: StateFlow<Boolean> = _isIndexingAlbum.asStateFlow()
+    private var indexingJob: Job? = null
 
     private val _registrationResult = MutableStateFlow<AlbumRegistrationResult?>(null)
     val registrationResult: StateFlow<AlbumRegistrationResult?> =
@@ -77,26 +110,32 @@ class GalleryViewModel(
     }
 
     fun loadAlbumImages(album: Album) {
-        viewModelScope.launch(Dispatchers.IO) {
-            val folder = File(album.canonicalPath)
-            val files = if (!folder.isDirectory || !folder.canRead()) {
-                emptyList()
-            } else {
-                folder.walkTopDown()
-                    .onEnter { it.name != ".personal-gallery" }
-                    .filter { it.isFile && it.extension.lowercase() in SUPPORTED_EXTENSIONS }
-                    .sortedWith(
-                        compareByDescending<File> { it.lastModified() }
-                            .thenBy { it.absolutePath }
-                    )
-                    .toList()
+        selectedAlbumId.value = album.id
+        indexingJob?.cancel()
+        indexingJob = viewModelScope.launch(Dispatchers.IO) {
+            _isIndexingAlbum.value = true
+            try {
+                mediaIndexRepository.reconcileAlbum(
+                    albumId = album.id,
+                    folder = File(album.canonicalPath)
+                )
+            } catch (exception: CancellationException) {
+                throw exception
+            } catch (_: Exception) {
+                // Keep the last successfully indexed catalogue available.
+            } finally {
+                if (selectedAlbumId.value == album.id) {
+                    _isIndexingAlbum.value = false
+                }
             }
-            _albumImages.value = files
         }
     }
 
     fun clearAlbumImages() {
-        _albumImages.value = emptyList()
+        indexingJob?.cancel()
+        indexingJob = null
+        _isIndexingAlbum.value = false
+        selectedAlbumId.value = null
     }
 
     fun ensureAlbumThumbnails(albumId: String) {

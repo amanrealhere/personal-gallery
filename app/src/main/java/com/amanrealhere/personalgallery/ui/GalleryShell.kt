@@ -25,6 +25,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.work.WorkInfo
 import com.amanrealhere.personalgallery.data.storage.GalleryStorage
 import com.amanrealhere.personalgallery.domain.model.Album
@@ -45,7 +46,8 @@ fun GalleryShell(viewModel: GalleryViewModel) {
 
     val albums by viewModel.albums.collectAsStateWithLifecycle()
     val thumbnailStates by viewModel.thumbnailStates.collectAsStateWithLifecycle()
-    val images by viewModel.albumImages.collectAsStateWithLifecycle()
+    val images = viewModel.albumImages.collectAsLazyPagingItems()
+    val isIndexingAlbum by viewModel.isIndexingAlbum.collectAsStateWithLifecycle()
     val workInfos by viewModel.thumbnailWorkInfos.collectAsStateWithLifecycle(initialValue = emptyList())
 
     val selectedAlbum = remember(albums, selectedAlbumPath) {
@@ -182,6 +184,8 @@ fun GalleryShell(viewModel: GalleryViewModel) {
                             AlbumContentsScreen(
                                 album = selectedAlbum,
                                 images = images,
+                                imageCount = selectedState?.imageCount ?: images.itemCount,
+                                isIndexing = isIndexingAlbum,
                                 coverPath = selectedState?.coverThumbnailPath,
                                 regularThumbnailDirectory = regularDirectory,
                                 progressMessage = progressMessage,

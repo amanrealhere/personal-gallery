@@ -26,6 +26,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.paging.LoadState
+import androidx.paging.compose.LazyPagingItems
+import androidx.paging.compose.itemContentType
+import androidx.paging.compose.itemKey
+import com.amanrealhere.personalgallery.data.local.MediaItemEntity
 import com.amanrealhere.personalgallery.domain.model.Album
 import com.amanrealhere.personalgallery.ui.components.ThumbnailPreview
 import java.io.File
@@ -33,13 +38,18 @@ import java.io.File
 @Composable
 fun AlbumContentsScreen(
     album: Album,
-    images: List<File>,
+    images: LazyPagingItems<MediaItemEntity>,
+    imageCount: Int,
+    isIndexing: Boolean,
     coverPath: String?,
     regularThumbnailDirectory: String?,
     progressMessage: String?,
     isLoading: Boolean,
     onRegenerate: () -> Unit
 ) {
+    val isRefreshing = images.loadState.refresh is LoadState.Loading
+    val hasNoItems = images.itemCount == 0
+
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(Modifier.fillMaxSize()) {
             Row(
@@ -56,7 +66,7 @@ fun AlbumContentsScreen(
                         overflow = TextOverflow.Ellipsis
                     )
                     Text(
-                        "${images.size} ${if (images.size == 1) "image" else "images"}",
+                        "$imageCount ${if (imageCount == 1) "image" else "images"}",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -81,7 +91,11 @@ fun AlbumContentsScreen(
                 }
             }
 
-            if (images.isEmpty()) {
+            if (hasNoItems && (isIndexing || isRefreshing)) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator()
+                }
+            } else if (hasNoItems) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         ThumbnailPreview(
@@ -105,34 +119,40 @@ fun AlbumContentsScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     items(
-                        items = images,
-                        key = { it.absolutePath },
-                        contentType = { "media-thumbnail" }
-                    ) { file ->
-                        val thumbnail = regularThumbnailDirectory?.let {
-                            val relativePath = file.relativeTo(File(album.canonicalPath)).path
-                            File(it, relativePath + ".jpg")
-                        }
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp),
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceContainer
-                            )
-                        ) {
-                            Column {
-                                ThumbnailPreview(
-                                    path = thumbnail?.takeIf { it.isFile }?.absolutePath,
-                                    modifier = Modifier.fillMaxWidth().height(148.dp)
+                        count = images.itemCount,
+                        key = images.itemKey { it.id },
+                        contentType = images.itemContentType { "media-thumbnail" }
+                    ) { index ->
+                        val media = images[index]
+                        if (media != null) {
+                            val sourceFile = File(media.sourcePath)
+                            val thumbnail = regularThumbnailDirectory?.let { directory ->
+                                val relativePath = runCatching {
+                                    sourceFile.relativeTo(File(album.canonicalPath)).path
+                                }.getOrNull()
+                                relativePath?.let { File(directory, "$it.jpg") }
+                            }
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceContainer
                                 )
-                                Text(
-                                    file.name,
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
+                            ) {
+                                Column {
+                                    ThumbnailPreview(
+                                        path = thumbnail?.takeIf { it.isFile }?.absolutePath,
+                                        modifier = Modifier.fillMaxWidth().height(148.dp)
+                                    )
+                                    Text(
+                                        media.displayName,
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
                             }
                         }
                     }
