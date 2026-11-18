@@ -82,6 +82,17 @@ class GalleryViewModel(
         }
         .cachedIn(viewModelScope)
 
+    val albumImageCount: StateFlow<Int> = selectedAlbumId
+        .flatMapLatest { albumId ->
+            if (albumId == null) flowOf(0)
+            else database.mediaItemDao().observeCountForAlbum(albumId)
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = 0
+        )
+
     private val _isIndexingAlbum = MutableStateFlow(false)
     val isIndexingAlbum: StateFlow<Boolean> = _isIndexingAlbum.asStateFlow()
     private var indexingJob: Job? = null

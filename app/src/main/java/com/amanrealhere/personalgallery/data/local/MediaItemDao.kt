@@ -37,4 +37,7 @@ interface MediaItemDao {
 
     @Query("SELECT COUNT(*) FROM media_items WHERE albumId = :albumId")
     suspend fun countForAlbum(albumId: String): Int
+
+    @Query("SELECT COUNT(*) FROM media_items WHERE albumId = :albumId")
+    fun observeCountForAlbum(albumId: String): kotlinx.coroutines.flow.Flow<Int>
 }

@@ -48,6 +48,7 @@ fun GalleryShell(viewModel: GalleryViewModel) {
     val thumbnailStates by viewModel.thumbnailStates.collectAsStateWithLifecycle()
     val images = viewModel.albumImages.collectAsLazyPagingItems()
     val isIndexingAlbum by viewModel.isIndexingAlbum.collectAsStateWithLifecycle()
+    val indexedImageCount by viewModel.albumImageCount.collectAsStateWithLifecycle()
     val workInfos by viewModel.thumbnailWorkInfos.collectAsStateWithLifecycle(initialValue = emptyList())
 
     val selectedAlbum = remember(albums, selectedAlbumPath) {
@@ -181,7 +182,7 @@ fun GalleryShell(viewModel: GalleryViewModel) {
                             AlbumContentsScreen(
                                 album = selectedAlbum,
                                 images = images,
-                                imageCount = selectedState?.imageCount ?: images.itemCount,
+                                imageCount = indexedImageCount,
                                 isIndexing = isIndexingAlbum,
                                 coverPath = selectedState?.coverThumbnailPath,
                                 regularThumbnailDirectory = regularDirectory,
