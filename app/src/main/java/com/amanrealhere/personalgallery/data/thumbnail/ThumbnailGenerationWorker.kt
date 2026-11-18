@@ -21,6 +21,9 @@ import com.amanrealhere.personalgallery.data.local.ThumbnailRecordEntity
 import com.amanrealhere.personalgallery.data.storage.GalleryStorage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.first
 import java.io.File
@@ -117,75 +120,90 @@ class ThumbnailGenerationWorker(
                 var latestCoverPath: String? = null
                 var albumFailures = 0
 
-                for ((index, source) in images.withIndex()) {
+                // Decode and encode at most two source images concurrently. This
+                // improves throughput without allowing an unbounded number of
+                // full-resolution bitmaps on memory-constrained devices.
+                for (chunk in images.withIndex().chunked(MAX_PARALLEL_IMAGES)) {
                     if (isStopped) throw CancellationException("Generation stopped")
-                    val relativeSourcePath = source.relativeTo(albumRoot).path
-                    val output = File(regularDirectory, relativeSourcePath + ".jpg")
-                    val record = createThumbnailRecord(
-                        source = source,
-                        destination = output,
-                        albumId = album.id,
-                        generationId = generationId,
-                        kind = KIND_REGULAR,
-                        size = REGULAR_SIZE,
-                        quality = REGULAR_QUALITY,
-                        oldRecord = oldRecordsByKey[source.absolutePath to KIND_REGULAR],
-                        force = force
-                    )
-                    pendingRecords.add(record)
-                    if (record.status == STATUS_SUCCESS || record.status == STATUS_REUSED) {
-                        successes++
-                    } else {
-                        failures++
-                        albumFailures++
+
+                    val chunkResults = coroutineScope {
+                        chunk.map { (index, source) ->
+                            async(Dispatchers.IO) {
+                                val relativeSourcePath = source.relativeTo(albumRoot).path
+                                val output = File(regularDirectory, relativeSourcePath + ".jpg")
+                                val records = mutableListOf<ThumbnailRecordEntity>()
+
+                                records += createThumbnailRecord(
+                                    source = source,
+                                    destination = output,
+                                    albumId = album.id,
+                                    generationId = generationId,
+                                    kind = KIND_REGULAR,
+                                    size = REGULAR_SIZE,
+                                    quality = REGULAR_QUALITY,
+                                    oldRecord = oldRecordsByKey[source.absolutePath to KIND_REGULAR],
+                                    force = force
+                                )
+
+                                if (index == 0) {
+                                    val coverOutput = File(coverDirectory, source.name + ".jpg")
+                                    records += createThumbnailRecord(
+                                        source = source,
+                                        destination = coverOutput,
+                                        albumId = album.id,
+                                        generationId = generationId,
+                                        kind = KIND_COVER,
+                                        size = COVER_SIZE,
+                                        quality = COVER_QUALITY,
+                                        oldRecord = oldRecordsByKey[source.absolutePath to KIND_COVER],
+                                        force = force
+                                    )
+                                }
+                                index to records
+                            }
+                        }.awaitAll()
                     }
-                    processed++
-                    if (index == 0) {
-                        val coverOutput = File(coverDirectory, source.name + ".jpg")
-                        val coverRecord = createThumbnailRecord(
-                            source = source,
-                            destination = coverOutput,
-                            albumId = album.id,
-                            generationId = generationId,
-                            kind = KIND_COVER,
-                            size = COVER_SIZE,
-                            quality = COVER_QUALITY,
-                            oldRecord = oldRecordsByKey[source.absolutePath to KIND_COVER],
-                            force = force
-                        )
-                        pendingRecords.add(coverRecord)
-                        latestCoverPath = if (coverRecord.status == STATUS_SUCCESS ||
-                            coverRecord.status == STATUS_REUSED
-                        ) coverRecord.outputPath else null
-                        if (coverRecord.status == STATUS_SUCCESS ||
-                            coverRecord.status == STATUS_REUSED
-                        ) {
-                            successes++
-                        } else {
-                            failures++
-                            albumFailures++
+
+                    for ((index, records) in chunkResults) {
+                        if (isStopped) throw CancellationException("Generation stopped")
+                        for (record in records) {
+                            pendingRecords.add(record)
+                            if (record.status == STATUS_SUCCESS || record.status == STATUS_REUSED) {
+                                successes++
+                            } else {
+                                failures++
+                                albumFailures++
+                            }
                         }
-                        processed++
-                    }
-                    if (pendingRecords.size >= 64) {
-                        dao.insertRecords(pendingRecords.toList())
-                        pendingRecords.clear()
-                    }
-                    val progressTime = System.currentTimeMillis()
-                    if (processed % 25 == 0 || processed == total ||
-                        progressTime - lastProgressUpdateAt >= 1_000L
-                    ) {
-                        dao.updateProgress(generationId, processed, successes, failures)
-                        setProgress(workDataOfProgress(processed, total, failures))
-                        lastProgressUpdateAt = progressTime
-                        setForeground(
-                            createForegroundInfo(
-                                "$scopeLabel · Creating thumbnails",
-                                processed,
-                                total,
-                                failures
+                        if (index == 0) {
+                            val coverRecord = records.firstOrNull { it.kind == KIND_COVER }
+                            latestCoverPath = coverRecord?.takeIf {
+                                it.status == STATUS_SUCCESS || it.status == STATUS_REUSED
+                            }?.outputPath
+                        }
+
+                        processed += records.size
+                        if (pendingRecords.size >= 64) {
+                            dao.insertRecords(pendingRecords.toList())
+                            pendingRecords.clear()
+                        }
+
+                        val progressTime = System.currentTimeMillis()
+                        if (processed % 25 == 0 || processed == total ||
+                            progressTime - lastProgressUpdateAt >= 1_000L
+                        ) {
+                            dao.updateProgress(generationId, processed, successes, failures)
+                            setProgress(workDataOfProgress(processed, total, failures))
+                            lastProgressUpdateAt = progressTime
+                            setForeground(
+                                createForegroundInfo(
+                                    "$scopeLabel · Creating thumbnails",
+                                    processed,
+                                    total,
+                                    failures
+                                )
                             )
-                        )
+                        }
                     }
                 }
 
@@ -541,6 +559,7 @@ class ThumbnailGenerationWorker(
         const val REGULAR_QUALITY = 85
         const val COVER_SIZE = 512
         const val COVER_QUALITY = 90
+        private const val MAX_PARALLEL_IMAGES = 2
 
         private const val CHANNEL_ID = "thumbnail-generation"
         private const val NOTIFICATION_ID = 4107
