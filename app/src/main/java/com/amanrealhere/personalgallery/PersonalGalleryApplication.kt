@@ -21,8 +21,8 @@ class PersonalGalleryApplication : Application() {
     val imageLoader: ImageLoader by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
         ImageLoader.Builder(this)
             .memoryCache {
-                MemoryCache.Builder(this)
-                    .maxSizePercent(0.15)
+                MemoryCache.Builder()
+                    .maxSizePercent(this@PersonalGalleryApplication, 0.15)
                     .build()
             }
             .diskCache(null)
