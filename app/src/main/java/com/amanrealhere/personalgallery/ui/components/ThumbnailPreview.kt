@@ -1,25 +1,24 @@
 package com.amanrealhere.personalgallery.ui.components
 
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.produceState
-import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
-import androidx.compose.foundation.layout.size
 import androidx.compose.ui.unit.dp
+import coil3.compose.AsyncImage
+import coil3.request.CachePolicy
+import coil3.request.ImageRequest
+import com.amanrealhere.personalgallery.PersonalGalleryApplication
 import com.amanrealhere.personalgallery.R
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import java.io.File
 
 @Composable
@@ -28,16 +27,29 @@ fun ThumbnailPreview(
     modifier: Modifier = Modifier,
     showFolderPlaceholder: Boolean = true
 ) {
-    val bitmapState = produceState<Bitmap?>(initialValue = null, path) {
-        value = if (path.isNullOrBlank()) null else withContext(Dispatchers.IO) {
-            val file = File(path)
-            if (file.isFile) BitmapFactory.decodeFile(file.absolutePath) else null
+    val context = LocalContext.current
+    val application = context.applicationContext as PersonalGalleryApplication
+
+    val thumbnailFile = remember(path) {
+        path?.takeIf(String::isNotBlank)?.let(::File)?.takeIf(File::isFile)
+    }
+    val cacheKey = remember(thumbnailFile) {
+        thumbnailFile?.let { file ->
+            // Include file metadata so replaced thumbnail content cannot reuse
+            // a decoded bitmap from an earlier version at the same path.
+            "${file.absolutePath}|${file.length()}|${file.lastModified()}"
         }
     }
-
-    DisposableEffect(bitmapState.value) {
-        val current = bitmapState.value
-        onDispose { current?.recycle() }
+    val request = remember(thumbnailFile, cacheKey) {
+        thumbnailFile?.let { file ->
+            ImageRequest.Builder(context)
+                .data(file)
+                .memoryCacheKey(cacheKey)
+                .diskCachePolicy(CachePolicy.DISABLED)
+                .memoryCachePolicy(CachePolicy.ENABLED)
+                .crossfade(false)
+                .build()
+        }
     }
 
     Surface(
@@ -48,19 +60,21 @@ fun ThumbnailPreview(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.Center
         ) {
-            val bitmap = bitmapState.value
-            if (bitmap != null) {
-                Image(
-                    bitmap = bitmap.asImageBitmap(),
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
-                )
-            } else if (showFolderPlaceholder) {
+            if (showFolderPlaceholder) {
                 Image(
                     painter = painterResource(R.drawable.ic_gallery_folder),
                     contentDescription = null,
                     modifier = Modifier.size(44.dp)
+                )
+            }
+
+            if (request != null) {
+                AsyncImage(
+                    model = request,
+                    imageLoader = application.imageLoader,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
                 )
             }
         }
