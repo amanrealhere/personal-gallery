@@ -10,6 +10,8 @@
         android:name=".PersonalGalleryApplication"
         android:allowBackup="false"
         android:label="Personal Gallery"
+        android:icon="@drawable/ic_launcher_foreground"
+        android:roundIcon="@drawable/ic_launcher_foreground"
         android:supportsRtl="true"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
 
