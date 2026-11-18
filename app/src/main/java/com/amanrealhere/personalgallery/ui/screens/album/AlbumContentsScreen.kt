@@ -104,7 +104,11 @@ fun AlbumContentsScreen(
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    items(images, key = { it.absolutePath }) { file ->
+                    items(
+                        items = images,
+                        key = { it.absolutePath },
+                        contentType = { "media-thumbnail" }
+                    ) { file ->
                         val thumbnail = regularThumbnailDirectory?.let {
                             val relativePath = file.relativeTo(File(album.canonicalPath)).path
                             File(it, relativePath + ".jpg")

@@ -111,7 +111,11 @@ fun HomeScreen(
                     horizontalArrangement = Arrangement.spacedBy(18.dp),
                     verticalArrangement = Arrangement.spacedBy(18.dp)
                 ) {
-                    items(albums, key = { it.id }) { album ->
+                    items(
+                        items = albums,
+                        key = { it.id },
+                        contentType = { "album-card" }
+                    ) { album ->
                         val state = thumbnailStates.firstOrNull { it.albumId == album.id }
                         Card(
                             onClick = { onAlbumClick(album) },
