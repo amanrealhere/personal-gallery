@@ -160,7 +160,7 @@ class GalleryViewModel(
             }
             if (alreadyCovered) return
 
-            val album = database.albumDao().findById(albumId) ?: return@launch
+            val album = database.albumDao().findById(albumId) ?: return
             val folder = File(album.canonicalPath)
             if (!folder.isDirectory || !folder.canRead()) return
             val files = database.mediaItemDao().itemsForAlbum(albumId)
