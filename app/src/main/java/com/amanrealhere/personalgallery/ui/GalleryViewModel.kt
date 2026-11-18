@@ -28,6 +28,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
@@ -224,7 +225,6 @@ class GalleryViewModel(
             if (!cacheIsCurrent) {
                 ThumbnailWorkScheduler.enqueueAlbum(getApplication(), albumId, force = false)
             }
-        }
     }
 
     private fun isValidCachedThumbnail(file: File, expectedSize: Int): Boolean {
