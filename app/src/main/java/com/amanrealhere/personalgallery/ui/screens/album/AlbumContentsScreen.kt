@@ -30,7 +30,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.paging.LoadState
 import androidx.paging.PagingData
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -54,7 +53,7 @@ fun AlbumContentsScreen(
     onRegenerate: () -> Unit
 ) {
     val pagingAdapter = remember { MediaGridPagingAdapter() }
-    val loadState by pagingAdapter.loadStateFlow.collectAsState(initial = LoadState.Loading)
+    val loadState by pagingAdapter.loadStateFlow.collectAsState()
     var hasItems by remember(pagingAdapter) { mutableStateOf(pagingAdapter.itemCount > 0) }
     var minimumCellSizeDp by remember { mutableFloatStateOf(148f) }
     var recyclerView by remember { mutableStateOf<RecyclerView?>(null) }
