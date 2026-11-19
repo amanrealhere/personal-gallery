@@ -178,16 +178,24 @@ class GalleryViewModel(
             state.imageCount == imageCount &&
             state.latestImageModifiedAtEpochMillis == latest?.modifiedAtEpochMillis
 
-        if (cacheIsCurrent) {
-            cacheIsCurrent = if (latest == null) {
-                state?.coverThumbnailPath == null
-            } else {
-                val coverPath = state?.coverThumbnailPath
-                coverPath != null && isValidCachedThumbnail(
-                    File(coverPath),
-                    ThumbnailGenerationWorker.COVER_SIZE
-                )
+        if (cacheIsCurrent && latest == null) {
+            cacheIsCurrent = state?.coverThumbnailPath == null
+        } else if (cacheIsCurrent && latest != null) {
+            val activeGenerationId = state?.activeGenerationId
+            val coverPath = state?.coverThumbnailPath
+            val coverRecord = activeGenerationId?.let { generationId ->
+                database.thumbnailDao().records(generationId, albumId).firstOrNull { record ->
+                    record.kind == ThumbnailGenerationWorker.KIND_COVER &&
+                        record.sourcePath == latest.sourcePath
+                }
             }
+            cacheIsCurrent = coverPath != null && coverRecord != null &&
+                coverRecord.status in setOf(
+                    ThumbnailGenerationWorker.STATUS_SUCCESS,
+                    ThumbnailGenerationWorker.STATUS_REUSED
+                ) &&
+                coverPath == coverRecord.outputPath &&
+                isValidCachedThumbnail(File(coverPath), ThumbnailGenerationWorker.COVER_SIZE)
         }
 
         if (!cacheIsCurrent) {

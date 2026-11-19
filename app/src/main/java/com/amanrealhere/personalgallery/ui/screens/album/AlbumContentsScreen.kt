@@ -1,6 +1,7 @@
 package com.amanrealhere.personalgallery.ui.screens.album
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -176,7 +177,7 @@ fun AlbumContentsScreen(
                                 Column {
                                     MediaThumbnailPreview(
                                         media = media,
-                                        modifier = Modifier.fillMaxWidth().height(148.dp)
+                                        modifier = Modifier.fillMaxWidth().aspectRatio(1f)
                                     )
                                     Text(
                                         media.displayName,
