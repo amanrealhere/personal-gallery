@@ -32,14 +32,12 @@ fun ThumbnailPreview(
     val application = context.applicationContext as PersonalGalleryApplication
 
     val thumbnailFile = remember(path) {
-        path?.takeIf(String::isNotBlank)?.let(::File)?.takeIf(File::isFile)
+        path?.takeIf(String::isNotBlank)?.let(::File)
     }
+    // Thumbnail paths are generation-specific and immutable, so the path is
+    // a stable cache key without synchronous filesystem metadata calls.
     val cacheKey = remember(thumbnailFile) {
-        thumbnailFile?.let { file ->
-            // Include file metadata so replaced thumbnail content cannot reuse
-            // a decoded bitmap from an earlier version at the same path.
-            "${file.absolutePath}|${file.length()}|${file.lastModified()}"
-        }
+        thumbnailFile?.absolutePath
     }
     val request = remember(thumbnailFile, cacheKey) {
         thumbnailFile?.let { file ->

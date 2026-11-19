@@ -51,6 +51,9 @@ fun GalleryShell(viewModel: GalleryViewModel) {
 
     val albums by viewModel.albums.collectAsStateWithLifecycle()
     val thumbnailStates by viewModel.thumbnailStates.collectAsStateWithLifecycle()
+    val thumbnailStatesByAlbumId = remember(thumbnailStates) {
+        thumbnailStates.associateBy { it.albumId }
+    }
     val images = viewModel.albumImages.collectAsLazyPagingItems()
     val isIndexingAlbum by viewModel.isIndexingAlbum.collectAsStateWithLifecycle()
     val indexedImageCount by viewModel.albumImageCount.collectAsStateWithLifecycle()
@@ -59,7 +62,7 @@ fun GalleryShell(viewModel: GalleryViewModel) {
     val selectedAlbum = remember(albums, selectedAlbumPath) {
         albums.firstOrNull { it.canonicalPath == selectedAlbumPath }
     }
-    val selectedState = thumbnailStates.firstOrNull { it.albumId == selectedAlbum?.id }
+    val selectedState = selectedAlbum?.id?.let(thumbnailStatesByAlbumId::get)
     val activeWork = workInfos.firstOrNull { it.state == WorkInfo.State.RUNNING }
         ?: workInfos.firstOrNull { !it.state.isFinished }
     val isGenerating = activeWork != null

@@ -141,7 +141,7 @@ fun AlbumContentsScreen(
                             ) {
                                 Column {
                                     ThumbnailPreview(
-                                        path = thumbnail?.takeIf { it.isFile }?.absolutePath,
+                                        path = thumbnail?.absolutePath,
                                         modifier = Modifier.fillMaxWidth().height(148.dp)
                                     )
                                     Text(
