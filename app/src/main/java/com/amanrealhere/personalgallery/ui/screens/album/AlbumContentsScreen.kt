@@ -42,6 +42,7 @@ import kotlin.math.floor
 
 @Composable
 fun AlbumContentsScreen(
+    sidebarExpanded: Boolean,
     album: Album,
     images: Flow<PagingData<MediaItemEntity>>,
     imageCount: Int,
@@ -90,8 +91,9 @@ fun AlbumContentsScreen(
 
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(Modifier.fillMaxSize()) {
-            Row(
-                Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 14.dp),
+            if (sidebarExpanded) {
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 14.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
@@ -109,8 +111,9 @@ fun AlbumContentsScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                OutlinedButton(onClick = onRegenerate, enabled = !isLoading) {
-                    Text("Regenerate cover")
+                    OutlinedButton(onClick = onRegenerate, enabled = !isLoading) {
+                        Text("Regenerate cover")
+                    }
                 }
             }
 
