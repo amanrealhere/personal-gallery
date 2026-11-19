@@ -5,7 +5,7 @@ import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.TextView
 import androidx.recyclerview.widget.DiffUtil
-import androidx.recyclerview.widget.PagingDataAdapter
+import androidx.paging.PagingDataAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.amanrealhere.personalgallery.R
 import com.amanrealhere.personalgallery.data.local.MediaItemEntity
