@@ -38,6 +38,7 @@ dependencies {
     // Glide handles original-media decoding, transformed-resource disk caching,
     // request lifecycle and in-memory reuse for the scrolling grid.
     implementation(libs.glide)
+    implementation(libs.coil.compose)
 
     implementation(libs.paging.runtime)
     implementation(libs.paging.compose)
