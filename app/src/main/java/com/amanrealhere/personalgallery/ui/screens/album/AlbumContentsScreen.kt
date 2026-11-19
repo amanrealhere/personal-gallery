@@ -29,6 +29,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.paging.CombinedLoadStates
 import androidx.paging.PagingData
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -52,7 +53,7 @@ fun AlbumContentsScreen(
     onRegenerate: () -> Unit
 ) {
     val pagingAdapter = remember { MediaGridPagingAdapter() }
-    var loadState by remember(pagingAdapter) { mutableStateOf(pagingAdapter.loadState) }
+    var loadState by remember(pagingAdapter) { mutableStateOf<CombinedLoadStates?>(null) }
     LaunchedEffect(pagingAdapter) {
         pagingAdapter.loadStateFlow.collect { loadState = it }
     }
@@ -188,11 +189,11 @@ fun AlbumContentsScreen(
                     }
                 )
 
-                if (!hasItems && (isIndexing || loadState.refresh is LoadState.Loading)) {
+                if (!hasItems && (isIndexing || loadState?.refresh is androidx.paging.LoadState.Loading)) {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         CircularProgressIndicator()
                     }
-                } else if (!hasItems && loadState.refresh !is LoadState.Loading) {
+                } else if (!hasItems && loadState?.refresh !is androidx.paging.LoadState.Loading) {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             ThumbnailPreview(
