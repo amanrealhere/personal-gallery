@@ -477,7 +477,7 @@ class ThumbnailGenerationWorker(
             manager.createNotificationChannel(
                 NotificationChannel(
                     CHANNEL_ID,
-                    "Thumbnail generation",
+                    "Album cover generation",
                     NotificationManager.IMPORTANCE_LOW
                 )
             )
