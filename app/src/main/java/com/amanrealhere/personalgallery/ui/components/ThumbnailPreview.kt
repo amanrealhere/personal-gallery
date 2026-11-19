@@ -18,7 +18,6 @@ import coil3.compose.AsyncImage
 import coil3.request.CachePolicy
 import coil3.request.ImageRequest
 import coil3.request.crossfade
-import com.amanrealhere.personalgallery.PersonalGalleryApplication
 import com.amanrealhere.personalgallery.R
 import java.io.File
 
@@ -29,13 +28,11 @@ fun ThumbnailPreview(
     showFolderPlaceholder: Boolean = true
 ) {
     val context = LocalContext.current
-    val application = context.applicationContext as PersonalGalleryApplication
-
     val thumbnailFile = remember(path) {
         path?.takeIf(String::isNotBlank)?.let(::File)
     }
-    // Thumbnail paths are generation-specific and immutable, so the path is
-    // a stable cache key without synchronous filesystem metadata calls.
+    // Thumbnail paths are generation-specific and immutable, so the path
+    // is a stable cache key without synchronous filesystem metadata calls.
     val cacheKey = remember(thumbnailFile) {
         thumbnailFile?.absolutePath
     }
@@ -70,7 +67,6 @@ fun ThumbnailPreview(
             if (request != null) {
                 AsyncImage(
                     model = request,
-                    imageLoader = application.imageLoader,
                     contentDescription = null,
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop
