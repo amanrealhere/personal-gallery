@@ -135,7 +135,7 @@ class GalleryViewModel(
                     folder = File(album.canonicalPath)
                 )
                 if (selectedAlbumId.value == album.id) {
-                    ensureAlbumThumbnailsNow(album.id)
+                    ensureAlbumCoverNow(album.id)
                 }
             } catch (exception: CancellationException) {
                 throw exception
@@ -158,78 +158,41 @@ class GalleryViewModel(
         selectedAlbumId.value = null
     }
 
-    fun ensureAlbumThumbnails(albumId: String) {
-        viewModelScope.launch(Dispatchers.IO) {
-            ensureAlbumThumbnailsNow(albumId)
+    private suspend fun ensureAlbumCoverNow(albumId: String) {
+        val workManager = WorkManager.getInstance(getApplication<Application>())
+        val pendingWorks = workManager
+            .getWorkInfosForUniqueWorkFlow(ThumbnailWorkScheduler.UNIQUE_WORK_NAME)
+            .first()
+        val alreadyCovered = pendingWorks.any { work ->
+            !work.state.isFinished && (
+                ThumbnailWorkScheduler.TAG_ALL in work.tags ||
+                    ThumbnailWorkScheduler.TAG_ALBUM_PREFIX + albumId in work.tags
+            )
         }
-    }
+        if (alreadyCovered) return
 
-    private suspend fun ensureAlbumThumbnailsNow(albumId: String) {
-            val workManager = WorkManager.getInstance(getApplication<Application>())
-            val pendingWorks = workManager
-                .getWorkInfosForUniqueWorkFlow(ThumbnailWorkScheduler.UNIQUE_WORK_NAME)
-                .first()
-            val alreadyCovered = pendingWorks.any { work ->
-                !work.state.isFinished && (
-                    ThumbnailWorkScheduler.TAG_ALL in work.tags ||
-                        ThumbnailWorkScheduler.TAG_ALBUM_PREFIX + albumId in work.tags
-                    )
+        val imageCount = database.mediaItemDao().countForAlbum(albumId)
+        val latest = database.mediaItemDao().latestItemForAlbum(albumId)
+        val state = database.thumbnailDao().albumState(albumId)
+        var cacheIsCurrent = state != null &&
+            state.imageCount == imageCount &&
+            state.latestImageModifiedAtEpochMillis == latest?.modifiedAtEpochMillis
+
+        if (cacheIsCurrent) {
+            cacheIsCurrent = if (latest == null) {
+                state?.coverThumbnailPath == null
+            } else {
+                val coverPath = state?.coverThumbnailPath
+                coverPath != null && isValidCachedThumbnail(
+                    File(coverPath),
+                    ThumbnailGenerationWorker.COVER_SIZE
+                )
             }
-            if (alreadyCovered) return
+        }
 
-            val album = database.albumDao().findById(albumId) ?: return
-            val folder = File(album.canonicalPath)
-            if (!folder.isDirectory || !folder.canRead()) return
-            val files = database.mediaItemDao().itemsForAlbum(albumId)
-                .map { File(it.sourcePath) }
-
-            val state = database.thumbnailDao().albumState(albumId)
-            val activeGenerationId = state?.activeGenerationId
-            var cacheIsCurrent = state != null && activeGenerationId != null &&
-                state.imageCount == files.size &&
-                state.latestImageModifiedAtEpochMillis == files.firstOrNull()?.lastModified()
-
-            if (cacheIsCurrent && activeGenerationId != null) {
-                val records = database.thumbnailDao().records(activeGenerationId, albumId)
-                val regularByPath = records
-                    .filter { it.kind == ThumbnailGenerationWorker.KIND_REGULAR }
-                    .associateBy { it.sourcePath }
-
-                cacheIsCurrent = files.all { file ->
-                    val record = regularByPath[file.absolutePath]
-                    record != null &&
-                        record.status in setOf(
-                            ThumbnailGenerationWorker.STATUS_SUCCESS,
-                            ThumbnailGenerationWorker.STATUS_REUSED
-                        ) &&
-                        record.sourceCanonicalPath == runCatching { file.canonicalPath }.getOrDefault(file.absolutePath) &&
-                        record.sourceName == file.name &&
-                        record.sourceSizeBytes == file.length() &&
-                        record.sourceModifiedAtEpochMillis == file.lastModified() &&
-                        isValidCachedThumbnail(File(record.outputPath), ThumbnailGenerationWorker.REGULAR_SIZE)
-                }
-
-                val latest = files.firstOrNull()
-                if (cacheIsCurrent && latest != null) {
-                    val cover = records.firstOrNull {
-                        it.kind == ThumbnailGenerationWorker.KIND_COVER &&
-                            it.sourcePath == latest.absolutePath
-                    }
-                    cacheIsCurrent = cover != null &&
-                        cover.status in setOf(
-                            ThumbnailGenerationWorker.STATUS_SUCCESS,
-                            ThumbnailGenerationWorker.STATUS_REUSED
-                        ) &&
-                        state?.coverThumbnailPath == cover.outputPath &&
-                        isValidCachedThumbnail(File(cover.outputPath), ThumbnailGenerationWorker.COVER_SIZE)
-                } else if (cacheIsCurrent && latest == null) {
-                    cacheIsCurrent = state?.coverThumbnailPath == null
-                }
-            }
-
-            if (!cacheIsCurrent) {
-                ThumbnailWorkScheduler.enqueueAlbum(getApplication(), albumId, force = false)
-            }
+        if (!cacheIsCurrent) {
+            ThumbnailWorkScheduler.enqueueAlbum(getApplication(), albumId, force = false)
+        }
     }
 
     private fun isValidCachedThumbnail(file: File, expectedSize: Int): Boolean {

@@ -82,9 +82,9 @@ fun GalleryShell(viewModel: GalleryViewModel) {
         val percent = if (total == 0) 0 else (processed * 100 / total).coerceIn(0, 100)
         when (work.state) {
             WorkInfo.State.ENQUEUED, WorkInfo.State.BLOCKED ->
-                "Thumbnail generation is queued"
+                "Cover generation is queued"
             WorkInfo.State.RUNNING ->
-                "Generating thumbnails: $processed / $total ($percent%) · $failures failures"
+                "Generating covers: $processed / $total ($percent%) · $failures failures"
             else -> "Thumbnail generation"
         }
     }
@@ -190,20 +190,12 @@ fun GalleryShell(viewModel: GalleryViewModel) {
                                 }
                             )
                         } else {
-                            val regularDirectory = selectedState?.activeGenerationId?.let { generationId ->
-                                File(
-                                    GalleryStorage.getInstance(context)
-                                        .albumThumbnailDirectory(generationId, selectedAlbum.id),
-                                    "regular"
-                                ).absolutePath
-                            }
-                            AlbumContentsScreen(
+                                        AlbumContentsScreen(
                                 album = selectedAlbum,
                                 images = images,
                                 imageCount = indexedImageCount,
                                 isIndexing = isIndexingAlbum,
                                 coverPath = selectedState?.coverThumbnailPath,
-                                regularThumbnailDirectory = regularDirectory,
                                 progressMessage = progressMessage,
                                 isLoading = isGenerating,
                                 onRegenerate = {

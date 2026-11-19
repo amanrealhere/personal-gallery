@@ -89,7 +89,7 @@ fun HomeScreen(
                             onClick = onRegenerateAll,
                             enabled = !isGenerating
                         ) {
-                            Text("Regenerate all thumbnails")
+                            Text("Regenerate covers")
                         }
                         FilledIconButton(
                             onClick = onAddAlbumClick,

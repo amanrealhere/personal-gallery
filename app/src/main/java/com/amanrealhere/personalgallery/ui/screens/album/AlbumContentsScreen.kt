@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -22,8 +23,16 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.awaitPointerEvent
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.paging.LoadState
@@ -32,8 +41,8 @@ import androidx.paging.compose.itemContentType
 import androidx.paging.compose.itemKey
 import com.amanrealhere.personalgallery.data.local.MediaItemEntity
 import com.amanrealhere.personalgallery.domain.model.Album
+import com.amanrealhere.personalgallery.ui.components.MediaThumbnailPreview
 import com.amanrealhere.personalgallery.ui.components.ThumbnailPreview
-import java.io.File
 
 @Composable
 fun AlbumContentsScreen(
@@ -42,13 +51,15 @@ fun AlbumContentsScreen(
     imageCount: Int,
     isIndexing: Boolean,
     coverPath: String?,
-    regularThumbnailDirectory: String?,
     progressMessage: String?,
     isLoading: Boolean,
     onRegenerate: () -> Unit
 ) {
     val isRefreshing = images.loadState.refresh is LoadState.Loading
     val hasNoItems = images.itemCount == 0
+    var minimumCellSize by remember { mutableStateOf(148.dp) }
+    val gridState = rememberLazyGridState()
+    LaunchedEffect(album.id) { gridState.scrollToItem(0) }
 
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(Modifier.fillMaxSize()) {
@@ -72,7 +83,7 @@ fun AlbumContentsScreen(
                     )
                 }
                 OutlinedButton(onClick = onRegenerate, enabled = !isLoading) {
-                    Text("Regenerate thumbnails")
+                    Text("Regenerate cover")
                 }
             }
 
@@ -112,8 +123,39 @@ fun AlbumContentsScreen(
                 }
             } else {
                 LazyVerticalGrid(
-                    columns = GridCells.Adaptive(minSize = 148.dp),
-                    modifier = Modifier.fillMaxSize(),
+                    columns = GridCells.Adaptive(minSize = minimumCellSize),
+                    state = gridState,
+                    modifier = Modifier.fillMaxSize().pointerInput(Unit) {
+                        awaitEachGesture {
+                            var previousDistance = 0f
+                            var accumulatedScale = 1f
+                            while (true) {
+                                val event = awaitPointerEvent()
+                                val pressed = event.changes.filter { it.pressed }
+                                if (pressed.size >= 2) {
+                                    val first = pressed[0].position
+                                    val second = pressed[1].position
+                                    val dx = second.x - first.x
+                                    val dy = second.y - first.y
+                                    val distance = kotlin.math.sqrt(dx * dx + dy * dy)
+                                    if (previousDistance > 0f && distance > 0f) {
+                                        accumulatedScale *= distance / previousDistance
+                                        if (accumulatedScale >= 1.12f || accumulatedScale <= 0.89f) {
+                                            minimumCellSize = (minimumCellSize * accumulatedScale)
+                                                .coerceIn(92.dp, 240.dp)
+                                            accumulatedScale = 1f
+                                        }
+                                    }
+                                    previousDistance = distance
+                                    event.changes.forEach { it.consume() }
+                                } else {
+                                    previousDistance = 0f
+                                    accumulatedScale = 1f
+                                    if (event.changes.none { it.pressed }) break
+                                }
+                            }
+                        }
+                    },
                     contentPadding = PaddingValues(18.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -125,13 +167,6 @@ fun AlbumContentsScreen(
                     ) { index ->
                         val media = images[index]
                         if (media != null) {
-                            val sourceFile = File(media.sourcePath)
-                            val thumbnail = regularThumbnailDirectory?.let { directory ->
-                                val relativePath = runCatching {
-                                    sourceFile.relativeTo(File(album.canonicalPath)).path
-                                }.getOrNull()
-                                relativePath?.let { File(directory, "$it.jpg") }
-                            }
                             Card(
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(12.dp),
@@ -140,8 +175,8 @@ fun AlbumContentsScreen(
                                 )
                             ) {
                                 Column {
-                                    ThumbnailPreview(
-                                        path = thumbnail?.absolutePath,
+                                    MediaThumbnailPreview(
+                                        media = media,
                                         modifier = Modifier.fillMaxWidth().height(148.dp)
                                     )
                                     Text(

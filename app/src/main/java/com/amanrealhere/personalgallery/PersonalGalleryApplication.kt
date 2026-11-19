@@ -12,11 +12,9 @@ class PersonalGalleryApplication : Application() {
     }
 
     /**
-     * One process-wide loader keeps decoded thumbnails reusable while grid
-     * items enter and leave the Compose composition.
-     *
-     * The thumbnail JPEGs already form our persistent disk cache, so Coil's
-     * second disk cache is deliberately disabled.
+     * One process-wide loader keeps decoded cache thumbnails reusable while grid
+     * items enter and leave the Compose composition. The app-managed JPEG cache
+     * is the durable thumbnail layer; Coil's second disk cache is disabled.
      */
     val imageLoader: ImageLoader by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
         ImageLoader.Builder(this)
