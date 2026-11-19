@@ -177,7 +177,13 @@ class ThumbnailGenerationWorker(
                 System.currentTimeMillis(),
                 pendingStates
             )
-            runCatching { cleanupUnusedGenerations(generationId) }
+            try {
+                cleanupUnusedGenerations()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                // Cache cleanup must not turn a successful cover refresh into a failed job.
+            }
             runCatching { postCompletionNotification(scopeLabel, processed, total, failures) }
             Result.success()
         } catch (cancelled: CancellationException) {
@@ -410,10 +416,10 @@ class ThumbnailGenerationWorker(
         val complete: Boolean
     )
 
-    private suspend fun cleanupUnusedGenerations(currentGenerationId: String) {
+    private suspend fun cleanupUnusedGenerations() {
         val activeIds = database.thumbnailDao().observeAlbumStates().first()
             .mapNotNull { it.activeGenerationId }
-            .toSet() + currentGenerationId
+            .toSet()
         val directories = GalleryStorage.getInstance(applicationContext)
             .generationsDirectory.listFiles()?.filter { it.isDirectory } ?: return
         database.thumbnailDao().deleteRegularThumbnailRecords()
