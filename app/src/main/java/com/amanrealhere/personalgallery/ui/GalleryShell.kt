@@ -190,6 +190,7 @@ fun GalleryShell(viewModel: GalleryViewModel) {
                             )
                         } else {
                                         AlbumContentsScreen(
+                                sidebarExpanded = sidebarExpanded,
                                 album = selectedAlbum,
                                 images = images,
                                 imageCount = indexedImageCount,
