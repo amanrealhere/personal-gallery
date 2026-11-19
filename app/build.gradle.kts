@@ -34,7 +34,11 @@ dependencies {
     implementation(libs.compose.ui.tooling.preview)
     implementation(libs.compose.material3)
     implementation(libs.compose.material.icons.core)
-    implementation(libs.coil.compose)
+
+    // Glide handles original-media decoding, transformed-resource disk caching,
+    // request lifecycle and in-memory reuse for the scrolling grid.
+    implementation(libs.glide)
+
     implementation(libs.paging.runtime)
     implementation(libs.paging.compose)
 
