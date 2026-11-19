@@ -1,7 +1,6 @@
 package com.amanrealhere.personalgallery.ui.screens.album
 
 import android.view.ScaleGestureDetector
-import android.view.View
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -150,9 +149,6 @@ fun AlbumContentsScreen(
                             setHasFixedSize(true)
                             setItemViewCacheSize(4)
                             itemAnimator = null
-                            isVerticalScrollBarEnabled = true
-                            isHorizontalScrollBarEnabled = false
-                            scrollBarStyle = View.SCROLLBARS_INSIDE_OVERLAY
                             layoutManager = GridLayoutManager(
                                 viewContext,
                                 calculateSpanCount(width, paddingLeft, paddingRight, density, minimumCellSizeDp)
