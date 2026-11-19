@@ -33,7 +33,6 @@ import androidx.paging.CombinedLoadStates
 import androidx.paging.PagingData
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import me.zhanghai.android.fastscroll.FastScrollerBuilder
 import com.amanrealhere.personalgallery.data.local.MediaItemEntity
 import com.amanrealhere.personalgallery.domain.model.Album
 import com.amanrealhere.personalgallery.ui.components.MediaGridPagingAdapter
@@ -61,6 +60,10 @@ fun AlbumContentsScreen(
     var hasItems by remember(pagingAdapter) { mutableStateOf(pagingAdapter.itemCount > 0) }
     var minimumCellSizeDp by remember { mutableFloatStateOf(148f) }
     var recyclerView by remember { mutableStateOf<RecyclerView?>(null) }
+    var stableImageCount by remember(album.id) { mutableStateOf(imageCount) }
+    LaunchedEffect(imageCount, isIndexing, album.id) {
+        if (imageCount > 0 || !isIndexing) stableImageCount = imageCount
+    }
 
     LaunchedEffect(images, pagingAdapter) {
         images.collectLatest { pagingData ->
@@ -89,20 +92,20 @@ fun AlbumContentsScreen(
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(Modifier.fillMaxSize()) {
             Row(
-                Modifier.fillMaxWidth().padding(horizontal = 28.dp, vertical = 22.dp),
+                Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 14.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Column(Modifier.weight(1f)) {
                     Text(
                         album.name,
-                        style = MaterialTheme.typography.headlineMedium,
+                        style = MaterialTheme.typography.titleLarge,
                         color = MaterialTheme.colorScheme.onBackground,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
                     Text(
-                        "$imageCount ${if (imageCount == 1) "image" else "images"}",
+                        "$stableImageCount ${if (stableImageCount == 1) "image" else "images"}",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -112,18 +115,22 @@ fun AlbumContentsScreen(
                 }
             }
 
-            if (progressMessage != null) {
-                Row(
-                    Modifier.fillMaxWidth().padding(horizontal = 28.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    CircularProgressIndicator(modifier = Modifier.height(18.dp), strokeWidth = 2.dp)
-                    Text(
-                        progressMessage,
-                        modifier = Modifier.padding(start = 12.dp),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+            Box(
+                Modifier.fillMaxWidth().height(32.dp).padding(horizontal = 24.dp),
+                contentAlignment = Alignment.CenterStart
+            ) {
+                if (progressMessage != null) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        CircularProgressIndicator(modifier = Modifier.height(16.dp), strokeWidth = 2.dp)
+                        Text(
+                            progressMessage,
+                            modifier = Modifier.padding(start = 10.dp),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                 }
             }
 
@@ -143,6 +150,9 @@ fun AlbumContentsScreen(
                             setHasFixedSize(true)
                             setItemViewCacheSize(4)
                             itemAnimator = null
+                            isVerticalScrollBarEnabled = true
+                            isHorizontalScrollBarEnabled = false
+                            scrollBarStyle = View.SCROLLBARS_INSIDE_OVERLAY
                             layoutManager = GridLayoutManager(
                                 viewContext,
                                 calculateSpanCount(width, paddingLeft, paddingRight, density, minimumCellSizeDp)
@@ -150,7 +160,6 @@ fun AlbumContentsScreen(
                                 isItemPrefetchEnabled = true
                             }
                             adapter = pagingAdapter
-                        FastScrollerBuilder(this).useDefaultStyle().build()
                         }
 
                         val scaleDetector = ScaleGestureDetector(
