@@ -1,6 +1,7 @@
 package com.amanrealhere.personalgallery.ui.components
 
 import android.graphics.drawable.GradientDrawable
+import android.view.View
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.TextView
@@ -90,7 +91,7 @@ class MediaGridItemView(context: android.content.Context) : FrameLayout(context)
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         val width = MeasureSpec.getSize(widthMeasure)
-        super.onMeasure(widthMeasureSpec, MeasureSpec.makeMeasureSpec(width, MeasureSpec.EXACTLY))
+        super.onMeasure(widthMeasureSpec, View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY)
         setMeasuredDimension(width, width)
     }
 

@@ -54,7 +54,7 @@ fun AlbumContentsScreen(
     onRegenerate: () -> Unit
 ) {
     val pagingAdapter = remember { MediaGridPagingAdapter() }
-    val loadState by pagingAdapter.loadStateFlow.collectAsState(initial = pagingAdapter.loadState)
+    val loadState by pagingAdapter.loadStateFlow.collectAsState(initial = LoadState.Loading)
     var hasItems by remember(pagingAdapter) { mutableStateOf(pagingAdapter.itemCount > 0) }
     var minimumCellSizeDp by remember { mutableFloatStateOf(148f) }
     var recyclerView by remember { mutableStateOf<RecyclerView?>(null) }
