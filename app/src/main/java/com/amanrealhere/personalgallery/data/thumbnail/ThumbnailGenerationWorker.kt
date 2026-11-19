@@ -21,9 +21,6 @@ import com.amanrealhere.personalgallery.data.local.ThumbnailRecordEntity
 import com.amanrealhere.personalgallery.data.storage.GalleryStorage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.first
 import java.io.File

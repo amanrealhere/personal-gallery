@@ -25,7 +25,7 @@ import kotlinx.coroutines.withContext
  * generation, avoiding whole-album thumbnail jobs before the first scroll.
  */
 object MediaThumbnailCache {
-    const val THUMBNAIL_SIZE = 256
+    const val DEFAULT_THUMBNAIL_SIZE = 256
     private const val JPEG_QUALITY = 85
     private const val CACHE_VERSION = 2
     private const val MAX_CACHE_BYTES = 350L * 1024L * 1024L
@@ -41,9 +41,11 @@ object MediaThumbnailCache {
         context: Context,
         sourcePath: String,
         sourceSizeBytes: Long,
-        sourceModifiedAtEpochMillis: Long
+        sourceModifiedAtEpochMillis: Long,
+        targetSize: Int
     ): File = withContext(Dispatchers.IO) {
-        val key = cacheKey(sourcePath, sourceSizeBytes, sourceModifiedAtEpochMillis)
+        val size = targetSize.coerceIn(128, 512)
+        val key = cacheKey(sourcePath, sourceSizeBytes, sourceModifiedAtEpochMillis, size)
         val directory = File(context.cacheDir, "media-grid-thumbnails-v$CACHE_VERSION")
         if (!directory.exists() && !directory.mkdirs()) {
             throw IllegalStateException("Could not create media thumbnail cache")
@@ -52,7 +54,7 @@ object MediaThumbnailCache {
         val lock = locks[Math.floorMod(key.hashCode(), LOCK_COUNT)]
 
         lock.withLock {
-            if (!isValid(destination)) {
+            if (!isValid(destination, size)) {
                 permits.withPermit {
                     coroutineContext.ensureActive()
                     val source = File(sourcePath)
@@ -64,7 +66,7 @@ object MediaThumbnailCache {
 
                     val temporary = File(directory, key + "." + System.nanoTime() + ".tmp")
                     try {
-                        val bitmap = decodeThumbnail(source, THUMBNAIL_SIZE)
+                        val bitmap = decodeThumbnail(source, size)
                             ?: throw IllegalArgumentException("Unsupported or unreadable image")
                         try {
                             coroutineContext.ensureActive()
@@ -100,17 +102,17 @@ object MediaThumbnailCache {
         destination
     }
 
-    private fun cacheKey(path: String, size: Long, modified: Long): String {
-        val identity = "$path|$size|$modified|$THUMBNAIL_SIZE|center-crop-v$CACHE_VERSION"
+    private fun cacheKey(path: String, size: Long, modified: Long, targetSize: Int): String {
+        val identity = "$path|$size|$modified|$targetSize|center-crop-v$CACHE_VERSION"
         val digest = MessageDigest.getInstance("SHA-256").digest(identity.toByteArray(Charsets.UTF_8))
         return digest.joinToString("") { "%02x".format(it) }
     }
 
-    private fun isValid(file: File): Boolean {
+    private fun isValid(file: File, targetSize: Int): Boolean {
         if (!file.isFile || file.length() <= 0L) return false
         val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeFile(file.absolutePath, options)
-        return options.outWidth == THUMBNAIL_SIZE && options.outHeight == THUMBNAIL_SIZE
+        return options.outWidth == targetSize && options.outHeight == targetSize
     }
 
     private fun decodeThumbnail(source: File, targetSize: Int): Bitmap? {

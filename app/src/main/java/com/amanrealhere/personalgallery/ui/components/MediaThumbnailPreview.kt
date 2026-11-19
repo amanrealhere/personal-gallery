@@ -8,8 +8,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -30,15 +35,19 @@ fun MediaThumbnailPreview(
 ) {
     val context = LocalContext.current
     val application = context.applicationContext as PersonalGalleryApplication
-    val cachedFile = produceState<File?>(null, media.id, media.sourcePath, media.fileSizeBytes, media.modifiedAtEpochMillis) {
-        value = runCatching {
-            MediaThumbnailCache.getOrCreate(
-                context,
-                media.sourcePath,
-                media.fileSizeBytes,
-                media.modifiedAtEpochMillis
-            )
-        }.getOrNull()
+    var targetSizePx by remember(media.id) { mutableIntStateOf(0) }
+    val cachedFile = produceState<File?>(null, media.id, media.sourcePath, media.fileSizeBytes, media.modifiedAtEpochMillis, targetSizePx) {
+        value = if (targetSizePx > 0) {
+            runCatching {
+                MediaThumbnailCache.getOrCreate(
+                    context,
+                    media.sourcePath,
+                    media.fileSizeBytes,
+                    media.modifiedAtEpochMillis,
+                    targetSizePx
+                )
+            }.getOrNull()
+        } else null
     }.value
 
     val request = cachedFile?.let { file ->
@@ -51,7 +60,12 @@ fun MediaThumbnailPreview(
             .build()
     }
 
-    Surface(modifier = modifier, color = MaterialTheme.colorScheme.surfaceContainerHigh) {
+    Surface(
+        modifier = modifier.onSizeChanged { size ->
+            targetSizePx = ((size.width + 63) / 64 * 64).coerceIn(128, 512)
+        },
+        color = MaterialTheme.colorScheme.surfaceContainerHigh
+    ) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             if (request == null) {
                 Image(
