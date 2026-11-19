@@ -19,7 +19,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -53,7 +52,10 @@ fun AlbumContentsScreen(
     onRegenerate: () -> Unit
 ) {
     val pagingAdapter = remember { MediaGridPagingAdapter() }
-    val loadState by pagingAdapter.loadStateFlow.collectAsState()
+    var loadState by remember(pagingAdapter) { mutableStateOf(pagingAdapter.loadState) }
+    LaunchedEffect(pagingAdapter) {
+        pagingAdapter.loadStateFlow.collect { loadState = it }
+    }
     var hasItems by remember(pagingAdapter) { mutableStateOf(pagingAdapter.itemCount > 0) }
     var minimumCellSizeDp by remember { mutableFloatStateOf(148f) }
     var recyclerView by remember { mutableStateOf<RecyclerView?>(null) }
