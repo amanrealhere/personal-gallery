@@ -413,7 +413,7 @@ class ThumbnailGenerationWorker(
         val complete: Boolean
     )
 
-    private fun cleanupUnusedGenerations(currentGenerationId: String) {
+    private suspend fun cleanupUnusedGenerations(currentGenerationId: String) {
         val activeIds = database.thumbnailDao().observeAlbumStates().first()
             .mapNotNull { it.activeGenerationId }
             .toSet() + currentGenerationId
