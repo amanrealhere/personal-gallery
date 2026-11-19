@@ -90,7 +90,7 @@ class MediaGridItemView(context: android.content.Context) : FrameLayout(context)
     }
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-        val width = MeasureSpec.getSize(widthMeasure)
+        val width = View.MeasureSpec.getSize(widthMeasureSpec)
         super.onMeasure(widthMeasureSpec, View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY))
         setMeasuredDimension(width, width)
     }
