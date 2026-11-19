@@ -419,8 +419,14 @@ class ThumbnailGenerationWorker(
             .toSet() + currentGenerationId
         val directories = GalleryStorage.getInstance(applicationContext)
             .generationsDirectory.listFiles()?.filter { it.isDirectory } ?: return
+        database.thumbnailDao().deleteRegularThumbnailRecords()
         directories.forEach { directory ->
-            if (directory.name !in activeIds) directory.deleteRecursively()
+            if (directory.name !in activeIds) {
+                directory.deleteRecursively()
+                database.thumbnailDao().deleteRecordsForGeneration(directory.name)
+            } else {
+                File(directory, "regular").deleteRecursively()
+            }
         }
     }
 

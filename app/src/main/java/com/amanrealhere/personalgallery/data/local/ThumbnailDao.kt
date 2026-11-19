@@ -92,4 +92,7 @@ interface ThumbnailDao {
 
     @Query("DELETE FROM thumbnail_records WHERE generationId = :generationId")
     suspend fun deleteRecordsForGeneration(generationId: String)
+
+    @Query("DELETE FROM thumbnail_records WHERE kind = 'regular'")
+    suspend fun deleteRegularThumbnailRecords()
 }

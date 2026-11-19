@@ -81,6 +81,7 @@ object MediaThumbnailCache {
                             source.lastModified() == sourceModifiedAtEpochMillis) {
                             "Source image changed during thumbnail generation"
                         }
+                        destination.delete()
                         check(temporary.renameTo(destination)) {
                             "Could not atomically place thumbnail in cache"
                         }
