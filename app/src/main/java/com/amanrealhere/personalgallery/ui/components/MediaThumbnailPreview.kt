@@ -7,7 +7,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import com.amanrealhere.personalgallery.R
 import com.amanrealhere.personalgallery.data.local.MediaItemEntity
@@ -29,20 +28,12 @@ fun MediaThumbnailPreview(
     media: MediaItemEntity,
     modifier: Modifier = Modifier
 ) {
-    val context = LocalContext.current
     val source = remember(media.sourcePath) { File(media.sourcePath) }
-    val signature = remember(
-        media.sourceCanonicalPath,
-        media.fileSizeBytes,
-        media.modifiedAtEpochMillis
-    ) {
-        ObjectKey(
-            "${media.sourceCanonicalPath}|${media.fileSizeBytes}|" +
-                "${media.modifiedAtEpochMillis}|grid-center-crop-v1"
-        )
-    }
-    val requestKey = remember(source, signature) {
-        "${source.absolutePath}|${signature.hashCode()}"
+    val cacheSignature = "${media.sourceCanonicalPath}|${media.fileSizeBytes}|" +
+        "${media.modifiedAtEpochMillis}|grid-center-crop-v1"
+    val signature = remember(cacheSignature) { ObjectKey(cacheSignature) }
+    val requestKey = remember(cacheSignature, media.sourcePath) {
+        "${source.absolutePath}|$cacheSignature"
     }
 
     Surface(
