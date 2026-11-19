@@ -33,6 +33,7 @@ import androidx.paging.CombinedLoadStates
 import androidx.paging.PagingData
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import me.zhanghai.android.fastscroll.FastScrollerBuilder
 import com.amanrealhere.personalgallery.data.local.MediaItemEntity
 import com.amanrealhere.personalgallery.domain.model.Album
 import com.amanrealhere.personalgallery.ui.components.MediaGridPagingAdapter
@@ -149,6 +150,7 @@ fun AlbumContentsScreen(
                                 isItemPrefetchEnabled = true
                             }
                             adapter = pagingAdapter
+                        FastScrollerBuilder(this).useDefaultStyle().build()
                         }
 
                         val scaleDetector = ScaleGestureDetector(

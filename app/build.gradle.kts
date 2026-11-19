@@ -42,6 +42,7 @@ dependencies {
 
     implementation(libs.paging.runtime)
     implementation(libs.recyclerview)
+    implementation(libs.android.fastscroll)
 
     implementation(libs.room.runtime)
     implementation(libs.room.paging)
