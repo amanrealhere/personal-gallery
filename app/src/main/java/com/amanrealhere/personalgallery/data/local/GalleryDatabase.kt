@@ -17,9 +17,10 @@ import java.io.File
         ThumbnailGenerationEntity::class,
         ThumbnailRecordEntity::class,
         AlbumThumbnailStateEntity::class,
-        MediaItemEntity::class
+        MediaItemEntity::class,
+        MediaItemStagingEntity::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = true
 )
 abstract class GalleryDatabase : RoomDatabase() {
@@ -48,7 +49,7 @@ abstract class GalleryDatabase : RoomDatabase() {
                 context,
                 GalleryDatabase::class.java,
                 databaseFile.absolutePath
-            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3).build()
+            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4).build()
         }
 
         private fun migratePrivateDatabaseIfNeeded(context: Context, destination: File) {
@@ -77,7 +78,7 @@ abstract class GalleryDatabase : RoomDatabase() {
                     context,
                     GalleryDatabase::class.java,
                     temporary.absolutePath
-                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3).build()
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4).build()
 
                 try {
                     runBlocking {
@@ -193,3 +194,32 @@ private val MIGRATION_2_3 = object : androidx.room.migration.Migration(2, 3) {
         """.trimIndent())
     }
 }
+private val MIGRATION_3_4 = object : androidx.room.migration.Migration(3, 4) {
+    override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS media_items_new (
+                id TEXT NOT NULL PRIMARY KEY, albumId TEXT NOT NULL, sourcePath TEXT NOT NULL,
+                sourceCanonicalPath TEXT NOT NULL, displayName TEXT NOT NULL,
+                fileSizeBytes INTEGER NOT NULL, modifiedAtEpochMillis INTEGER NOT NULL
+            )
+        """.trimIndent())
+        db.execSQL("""
+            INSERT INTO media_items_new (id, albumId, sourcePath, sourceCanonicalPath, displayName, fileSizeBytes, modifiedAtEpochMillis)
+            SELECT id, albumId, sourcePath, sourceCanonicalPath, displayName, fileSizeBytes, modifiedAtEpochMillis
+            FROM media_items
+        """.trimIndent())
+        db.execSQL("DROP TABLE media_items")
+        db.execSQL("ALTER TABLE media_items_new RENAME TO media_items")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_media_items_albumId_modifiedAtEpochMillis_sourcePath ON media_items(albumId, modifiedAtEpochMillis, sourcePath)")
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS media_item_staging (
+                scanToken TEXT NOT NULL, id TEXT NOT NULL, albumId TEXT NOT NULL, sourcePath TEXT NOT NULL,
+                sourceCanonicalPath TEXT NOT NULL, displayName TEXT NOT NULL,
+                fileSizeBytes INTEGER NOT NULL, modifiedAtEpochMillis INTEGER NOT NULL,
+                PRIMARY KEY(scanToken, id)
+            )
+        """.trimIndent())
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_media_item_staging_scanToken_albumId ON media_item_staging(scanToken, albumId)")
+    }
+}
+

@@ -145,8 +145,17 @@ fun AlbumContentsScreen(
                         scaleDetector.onTouchEvent(event)
                         false
                     }
+                    var previousWidth = 0
                     rv.addOnLayoutChangeListener { view, _, _, _, _, _, _, _, _ ->
-                        updateGridSpanCount(view as RecyclerView, viewDensity, minimumCellSizeDp)
+                        val changedRv = view as RecyclerView
+                        if (changedRv.width != previousWidth) {
+                            val anchor = captureGridScrollAnchor(changedRv)
+                            updateGridSpanCount(changedRv, viewDensity, minimumCellSizeDp, preserveAnchor = false)
+                            restoreGridScrollAnchor(changedRv, anchor)
+                            previousWidth = changedRv.width
+                        } else {
+                            updateGridSpanCount(changedRv, viewDensity, minimumCellSizeDp)
+                        }
                     }
                     recyclerView = rv
                     rv
@@ -154,10 +163,13 @@ fun AlbumContentsScreen(
                 update = { rv ->
                     if (rv.adapter !== pagingAdapter) rv.adapter = pagingAdapter
                     val topPadding = topOverlayHeightPx + overlayBottomGapPx
-                    if (rv.paddingTop != topPadding) {
+                    val paddingChanged = rv.paddingTop != topPadding
+                    val anchor = if (paddingChanged) captureGridScrollAnchor(rv) else null
+                    if (paddingChanged) {
                         rv.setPadding(rv.paddingLeft, topPadding, rv.paddingRight, rv.paddingBottom)
                     }
                     updateGridSpanCount(rv, rv.resources.displayMetrics.density, minimumCellSizeDp)
+                    if (paddingChanged) restoreGridScrollAnchor(rv, anchor)
                 },
                 onRelease = { rv ->
                     rv.adapter = null
@@ -248,6 +260,23 @@ fun AlbumContentsScreen(
     }
 }
 
+private data class GridScrollAnchor(val position: Int, val offsetFromPadding: Int)
+
+private fun captureGridScrollAnchor(recyclerView: RecyclerView): GridScrollAnchor? {
+    val layoutManager = recyclerView.layoutManager as? GridLayoutManager ?: return null
+    val position = layoutManager.findFirstVisibleItemPosition()
+    if (position == RecyclerView.NO_POSITION) return null
+    val child = layoutManager.findViewByPosition(position)
+    return GridScrollAnchor(position, (child?.top ?: recyclerView.paddingTop) - recyclerView.paddingTop)
+}
+
+private fun restoreGridScrollAnchor(recyclerView: RecyclerView, anchor: GridScrollAnchor?) {
+    val adapter = recyclerView.adapter ?: return
+    if (anchor == null || adapter.itemCount == 0) return
+    val layoutManager = recyclerView.layoutManager as? GridLayoutManager ?: return
+    layoutManager.scrollToPositionWithOffset(anchor.position.coerceIn(0, adapter.itemCount - 1), anchor.offsetFromPadding)
+}
+
 private fun calculateSpanCount(
     widthPx: Int,
     paddingLeftPx: Int,
@@ -266,7 +295,8 @@ private fun calculateSpanCount(
 private fun updateGridSpanCount(
     recyclerView: RecyclerView,
     density: Float,
-    minimumCellSizeDp: Float
+    minimumCellSizeDp: Float,
+    preserveAnchor: Boolean = true
 ) {
     val layoutManager = recyclerView.layoutManager as? GridLayoutManager ?: return
     val spanCount = calculateSpanCount(
@@ -277,6 +307,8 @@ private fun updateGridSpanCount(
         minimumCellSizeDp
     )
     if (layoutManager.spanCount != spanCount) {
+        val anchor = if (preserveAnchor) captureGridScrollAnchor(recyclerView) else null
         layoutManager.spanCount = spanCount
+        if (preserveAnchor) restoreGridScrollAnchor(recyclerView, anchor)
     }
 }

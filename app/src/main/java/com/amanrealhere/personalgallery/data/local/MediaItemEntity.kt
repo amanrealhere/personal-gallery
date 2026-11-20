@@ -17,6 +17,5 @@ data class MediaItemEntity(
     val sourceCanonicalPath: String,
     val displayName: String,
     val fileSizeBytes: Long,
-    val modifiedAtEpochMillis: Long,
-    val lastSeenScanToken: String
+    val modifiedAtEpochMillis: Long
 )

@@ -43,6 +43,7 @@ fun GalleryShell(viewModel: GalleryViewModel) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     var sidebarExpanded by remember { mutableStateOf(true) }
+    var shouldRefreshAlbumOnResume by remember { mutableStateOf(false) }
     var selectedAlbumPath by remember { mutableStateOf<String?>(null) }
     var destination by remember { mutableStateOf(GalleryDestination.Albums) }
     val pendingGeneration = remember { mutableStateOf<(() -> Unit)?>(null) }
@@ -125,8 +126,15 @@ fun GalleryShell(viewModel: GalleryViewModel) {
 
     DisposableEffect(lifecycleOwner, selectedAlbum?.id) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) {
-                selectedAlbum?.let(viewModel::loadAlbumImages)
+            when (event) {
+                Lifecycle.Event.ON_PAUSE -> shouldRefreshAlbumOnResume = true
+                Lifecycle.Event.ON_RESUME -> {
+                    if (shouldRefreshAlbumOnResume) {
+                        shouldRefreshAlbumOnResume = false
+                        selectedAlbum?.let(viewModel::loadAlbumImages)
+                    }
+                }
+                else -> Unit
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
