@@ -72,7 +72,8 @@ class GalleryViewModel(
                         pageSize = 60,
                         initialLoadSize = 90,
                         prefetchDistance = 30,
-                        enablePlaceholders = false,
+                        // Represent the full album positions while unloaded pages remain placeholders.
+                        enablePlaceholders = true,
                         maxSize = 240
                     ),
                     pagingSourceFactory = {
