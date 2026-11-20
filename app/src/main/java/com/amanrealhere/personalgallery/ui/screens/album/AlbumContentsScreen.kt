@@ -68,13 +68,13 @@ fun AlbumContentsScreen(
 ) {
     val context = LocalContext.current
     val pagingAdapter = remember { MediaGridPagingAdapter() }
-    val diagnostics = remember(album.id) { GridDiagnosticsRecorder(context, album.name, album.id) }
+    val diagnostics = remember(album.id) { GridDiagnosticsRecorder(context) }
     var showDiagnostics by remember { mutableStateOf(false) }
     val exportLogLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { uri ->
         if (uri != null) runCatching { context.contentResolver.openOutputStream(uri)?.use { stream -> stream.write(diagnostics.readAll().toByteArray(Charsets.UTF_8)) } }
     }
     DisposableEffect(diagnostics) {
-        diagnostics.log("ALBUM_SCREEN_COMPOSED album=${album.name} id=${album.id} count=$imageCount indexing=$isIndexing")
+        diagnostics.beginSession(album.name, album.id)
         onDispose { diagnostics.log("ALBUM_SCREEN_DISPOSED"); diagnostics.stop() }
     }
     var loadState by remember(pagingAdapter) { mutableStateOf<CombinedLoadStates?>(null) }

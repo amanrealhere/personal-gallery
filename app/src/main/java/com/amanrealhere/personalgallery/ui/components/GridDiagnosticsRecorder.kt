@@ -12,7 +12,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-class GridDiagnosticsRecorder(context: Context, albumName: String, albumId: String) {
+class GridDiagnosticsRecorder(context: Context) {
     private val file = File(File(context.filesDir, "grid-diagnostics"), "latest-session.txt")
     val visibleLines = mutableStateListOf<String>()
     var isRecording by mutableStateOf(true)
