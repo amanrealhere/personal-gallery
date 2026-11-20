@@ -73,7 +73,8 @@ class GalleryViewModel(
                         initialLoadSize = 90,
                         prefetchDistance = 30,
                         enablePlaceholders = false,
-                        // Diagnostic experiment: retain all loaded pages to isolate Paging eviction.\n                        maxSize = Int.MAX_VALUE
+                        // Diagnostic experiment: retain all loaded pages to isolate Paging eviction.
+                        maxSize = Int.MAX_VALUE
                     ),
                     pagingSourceFactory = {
                         database.mediaItemDao().pagingSource(albumId)
