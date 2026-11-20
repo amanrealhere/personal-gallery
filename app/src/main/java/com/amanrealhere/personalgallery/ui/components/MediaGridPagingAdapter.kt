@@ -110,7 +110,7 @@ class MediaGridItemView(context: android.content.Context) : FrameLayout(context)
             .diskCacheStrategy(DiskCacheStrategy.RESOURCE)
             .centerCrop()
             .dontAnimate()
-            .placeholder(R.drawable.ic_gallery_folder)
+            .placeholder(android.graphics.drawable.ColorDrawable(0xFF242424.toInt()))
             .error(R.drawable.ic_gallery_folder)
             .into(thumbnail)
     }
