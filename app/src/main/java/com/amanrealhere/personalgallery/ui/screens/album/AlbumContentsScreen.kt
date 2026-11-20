@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -25,6 +26,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -89,132 +93,152 @@ fun AlbumContentsScreen(
         recyclerView?.post { recyclerView?.scrollToPosition(0) }
     }
 
+    val density = LocalDensity.current
+    val overlayBottomGapPx = with(density) { 10.dp.roundToPx() }
+    var topOverlayHeightPx by remember { mutableStateOf(0) }
+
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-        Column(Modifier.fillMaxSize()) {
-            if (sidebarExpanded) {
-                Row(
-                    Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 14.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        album.name,
-                        style = MaterialTheme.typography.titleLarge,
-                        color = MaterialTheme.colorScheme.onBackground,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        "$stableImageCount ${if (stableImageCount == 1) "image" else "images"}",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                    OutlinedButton(onClick = onRegenerate, enabled = !isLoading) {
-                        Text("Regenerate cover")
-                    }
-                }
-            }
-
-            Box(
-                Modifier.fillMaxWidth().height(32.dp).padding(horizontal = 24.dp),
-                contentAlignment = Alignment.CenterStart
-            ) {
-                if (progressMessage != null) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        CircularProgressIndicator(modifier = Modifier.height(16.dp), strokeWidth = 2.dp)
-                        Text(
-                            progressMessage,
-                            modifier = Modifier.padding(start = 10.dp),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+        Box(Modifier.fillMaxSize().clipToBounds()) {
+            AndroidView(
+                modifier = Modifier.fillMaxSize(),
+                factory = { viewContext ->
+                    val viewDensity = viewContext.resources.displayMetrics.density
+                    val rv = RecyclerView(viewContext).apply {
+                        clipToPadding = false
+                        setPadding(
+                            (18f * viewDensity).toInt(),
+                            topOverlayHeightPx + overlayBottomGapPx,
+                            (18f * viewDensity).toInt(),
+                            (18f * viewDensity).toInt()
                         )
-                    }
-                }
-            }
-
-            Box(Modifier.fillMaxSize()) {
-                AndroidView(
-                    modifier = Modifier.fillMaxSize(),
-                    factory = { viewContext ->
-                        val density = viewContext.resources.displayMetrics.density
-                        val rv = RecyclerView(viewContext).apply {
-                            clipToPadding = false
-                            setPadding(
-                                (18f * density).toInt(),
-                                (18f * density).toInt(),
-                                (18f * density).toInt(),
-                                (18f * density).toInt()
-                            )
-                            setHasFixedSize(true)
-                            setItemViewCacheSize(4)
-                            itemAnimator = null
-                            layoutManager = GridLayoutManager(
-                                viewContext,
-                                calculateSpanCount(width, paddingLeft, paddingRight, density, minimumCellSizeDp)
-                            ).apply {
-                                isItemPrefetchEnabled = true
-                            }
-                            adapter = pagingAdapter
-                        }
-
-                        val scaleDetector = ScaleGestureDetector(
+                        setHasFixedSize(true)
+                        setItemViewCacheSize(4)
+                        itemAnimator = null
+                        layoutManager = GridLayoutManager(
                             viewContext,
-                            object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
-                                private var accumulatedScale = 1f
-                                override fun onScale(detector: ScaleGestureDetector): Boolean {
-                                    accumulatedScale *= detector.scaleFactor
-                                    if (accumulatedScale >= 1.12f || accumulatedScale <= 0.89f) {
-                                        minimumCellSizeDp = (minimumCellSizeDp * accumulatedScale)
-                                            .coerceIn(92f, 240f)
-                                        accumulatedScale = 1f
-                                    }
-                                    return true
-                                }
-                                override fun onScaleEnd(detector: ScaleGestureDetector) {
+                            calculateSpanCount(width, paddingLeft, paddingRight, viewDensity, minimumCellSizeDp)
+                        ).apply {
+                            isItemPrefetchEnabled = true
+                        }
+                        adapter = pagingAdapter
+                    }
+
+                    val scaleDetector = ScaleGestureDetector(
+                        viewContext,
+                        object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
+                            private var accumulatedScale = 1f
+                            override fun onScale(detector: ScaleGestureDetector): Boolean {
+                                accumulatedScale *= detector.scaleFactor
+                                if (accumulatedScale >= 1.12f || accumulatedScale <= 0.89f) {
+                                    minimumCellSizeDp = (minimumCellSizeDp * accumulatedScale)
+                                        .coerceIn(92f, 240f)
                                     accumulatedScale = 1f
                                 }
+                                return true
                             }
-                        )
-                        rv.setOnTouchListener { _, event ->
-                            scaleDetector.onTouchEvent(event)
-                            false
+                            override fun onScaleEnd(detector: ScaleGestureDetector) {
+                                accumulatedScale = 1f
+                            }
                         }
-                        rv.addOnLayoutChangeListener { view, _, _, _, _, _, _, _, _ ->
-                            updateGridSpanCount(view as RecyclerView, density, minimumCellSizeDp)
-                        }
-                        recyclerView = rv
-                        rv
-                    },
-                    update = { rv ->
-                        if (rv.adapter !== pagingAdapter) rv.adapter = pagingAdapter
-                        updateGridSpanCount(rv, rv.resources.displayMetrics.density, minimumCellSizeDp)
-                    },
-                    onRelease = { rv ->
-                        rv.adapter = null
-                        if (recyclerView === rv) recyclerView = null
+                    )
+                    rv.setOnTouchListener { _, event ->
+                        scaleDetector.onTouchEvent(event)
+                        false
                     }
-                )
+                    rv.addOnLayoutChangeListener { view, _, _, _, _, _, _, _, _ ->
+                        updateGridSpanCount(view as RecyclerView, viewDensity, minimumCellSizeDp)
+                    }
+                    recyclerView = rv
+                    rv
+                },
+                update = { rv ->
+                    if (rv.adapter !== pagingAdapter) rv.adapter = pagingAdapter
+                    val topPadding = topOverlayHeightPx + overlayBottomGapPx
+                    if (rv.paddingTop != topPadding) {
+                        rv.setPadding(rv.paddingLeft, topPadding, rv.paddingRight, rv.paddingBottom)
+                    }
+                    updateGridSpanCount(rv, rv.resources.displayMetrics.density, minimumCellSizeDp)
+                },
+                onRelease = { rv ->
+                    rv.adapter = null
+                    if (recyclerView === rv) recyclerView = null
+                }
+            )
 
-                if (!hasItems && (isIndexing || loadState?.refresh is androidx.paging.LoadState.Loading)) {
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator()
+            if (!hasItems && (isIndexing || loadState?.refresh is androidx.paging.LoadState.Loading)) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator()
+                }
+            } else if (!hasItems && loadState?.refresh !is androidx.paging.LoadState.Loading) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        ThumbnailPreview(
+                            path = coverPath,
+                            modifier = Modifier.fillMaxWidth(0.35f).height(120.dp)
+                        )
+                        Spacer(Modifier.height(16.dp))
+                        Text(
+                            "No supported images found in this folder.",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
-                } else if (!hasItems && loadState?.refresh !is androidx.paging.LoadState.Loading) {
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            ThumbnailPreview(
-                                path = coverPath,
-                                modifier = Modifier.fillMaxWidth(0.35f).height(120.dp)
-                            )
-                            Spacer(Modifier.height(16.dp))
+                }
+            }
+
+            Column(
+                modifier = Modifier.fillMaxWidth().onSizeChanged { size ->
+                    if (topOverlayHeightPx != size.height) topOverlayHeightPx = size.height
+                }
+            ) {
+                if (sidebarExpanded) {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 12.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        shadowElevation = 2.dp,
+                        tonalElevation = 1.dp
+                    ) {
+                        Row(
+                            Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    album.name,
+                                    style = MaterialTheme.typography.titleLarge,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    "$stableImageCount ${if (stableImageCount == 1) "image" else "images"}",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            OutlinedButton(onClick = onRegenerate, enabled = !isLoading) {
+                                Text("Regenerate cover")
+                            }
+                        }
+                    }
+                }
+
+                if (progressMessage != null) {
+                    Box(
+                        Modifier.fillMaxWidth().height(32.dp).padding(horizontal = 24.dp),
+                        contentAlignment = Alignment.CenterStart
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            CircularProgressIndicator(modifier = Modifier.height(16.dp), strokeWidth = 2.dp)
                             Text(
-                                "No supported images found in this folder.",
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                progressMessage,
+                                modifier = Modifier.padding(start = 10.dp),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                     }

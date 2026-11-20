@@ -27,7 +27,8 @@ class MediaGridPagingAdapter :
         MediaViewHolder(MediaGridItemView(parent.context))
 
     override fun onBindViewHolder(holder: MediaViewHolder, position: Int) {
-        getItem(position)?.let(holder::bind)
+        val media = getItem(position)
+        if (media != null) holder.bind(media) else holder.clear()
     }
 
     override fun onViewRecycled(holder: MediaViewHolder) {
@@ -100,16 +101,14 @@ class MediaGridItemView(context: android.content.Context) : FrameLayout(context)
         val cacheKey = "${media.sourceCanonicalPath}|${media.fileSizeBytes}|" +
             "${media.modifiedAtEpochMillis}|grid-center-crop-v1"
         val requestKey = "${media.sourcePath}|$cacheKey"
-        if (currentRequestKey == requestKey && thumbnail.tag == requestKey) return
+        if (currentRequestKey == requestKey) return
 
         currentRequestKey = requestKey
-        thumbnail.tag = requestKey
         Glide.with(thumbnail)
             .load(File(media.sourcePath))
             .signature(ObjectKey(cacheKey))
             .diskCacheStrategy(DiskCacheStrategy.RESOURCE)
             .centerCrop()
-            .priority(com.bumptech.glide.Priority.LOW)
             .dontAnimate()
             .placeholder(R.drawable.ic_gallery_folder)
             .error(R.drawable.ic_gallery_folder)
@@ -119,7 +118,6 @@ class MediaGridItemView(context: android.content.Context) : FrameLayout(context)
     fun clear() {
         Glide.with(thumbnail).clear(thumbnail)
         thumbnail.setImageDrawable(null)
-        thumbnail.tag = null
         currentRequestKey = null
     }
 }

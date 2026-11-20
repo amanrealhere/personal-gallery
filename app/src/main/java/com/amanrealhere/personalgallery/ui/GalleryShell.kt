@@ -6,7 +6,6 @@ import android.os.Build
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -134,10 +133,7 @@ fun GalleryShell(viewModel: GalleryViewModel) {
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    val sidebarWidth by animateDpAsState(
-        targetValue = if (sidebarExpanded) 280.dp else 76.dp,
-        label = "sidebar-width"
-    )
+    val sidebarWidth = if (sidebarExpanded) 280.dp else 76.dp
 
     BackHandler(
         enabled = destination == GalleryDestination.AddAlbum || selectedAlbumPath != null
