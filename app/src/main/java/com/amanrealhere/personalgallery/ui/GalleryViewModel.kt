@@ -73,7 +73,7 @@ class GalleryViewModel(
                         initialLoadSize = 90,
                         prefetchDistance = 30,
                         enablePlaceholders = false,
-                        maxSize = PagingConfig.MAX_SIZE_UNBOUNDED
+                        maxSize = 240
                     ),
                     pagingSourceFactory = {
                         database.mediaItemDao().pagingSource(albumId)
@@ -123,9 +123,14 @@ class GalleryViewModel(
     }
 
     fun loadAlbumImages(album: Album) {
+        if (selectedAlbumId.value == album.id) return
         if (indexingAlbumId == album.id && indexingJob?.isActive == true) return
-        selectedAlbumId.value = album.id
+
+        // Keep the live Paging dataset unchanged while filesystem reconciliation runs.
+        // Publish this album to Paging only after the scan has finished, so the
+        // first displayed generation already reflects the completed catalogue.
         indexingJob?.cancel()
+        selectedAlbumId.value = null
         indexingAlbumId = album.id
         _isIndexingAlbum.value = true
         indexingJob = viewModelScope.launch(Dispatchers.IO) {
@@ -134,18 +139,20 @@ class GalleryViewModel(
                     albumId = album.id,
                     folder = File(album.canonicalPath)
                 )
-                if (selectedAlbumId.value == album.id) {
-                    ensureAlbumCoverNow(album.id)
-                }
             } catch (exception: CancellationException) {
                 throw exception
             } catch (_: Exception) {
-                // Keep the last successfully indexed catalogue available.
+                // If scanning fails, still show the last successfully indexed catalogue.
             } finally {
-                if (selectedAlbumId.value == album.id) {
+                if (indexingAlbumId == album.id && indexingJob?.isActive == true) {
+                    selectedAlbumId.value = album.id
                     _isIndexingAlbum.value = false
                     indexingAlbumId = null
                 }
+            }
+
+            if (selectedAlbumId.value == album.id) {
+                ensureAlbumCoverNow(album.id)
             }
         }
     }
