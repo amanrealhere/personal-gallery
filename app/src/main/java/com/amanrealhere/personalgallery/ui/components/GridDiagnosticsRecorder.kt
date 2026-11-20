@@ -15,13 +15,24 @@ import java.util.Locale
 class GridDiagnosticsRecorder(context: Context) {
     private val file = File(File(context.filesDir, "grid-diagnostics"), "latest-session.txt")
     val visibleLines = mutableStateListOf<String>()
-    var isRecording by mutableStateOf(true)
+    var isRecording by mutableStateOf(false)
         private set
     private val seen = LinkedHashSet<String>()
     private var previous: List<String>? = null
     private var lastScroll = 0L
     private val started = SystemClock.elapsedRealtime()
-    init { file.parentFile?.mkdirs(); file.writeText(""); log("SESSION_START album=${q(albumName)} id=${q(albumId)}"); log("NOTE: snapshots cover loaded Paging items, not the full album database.") }
+    fun beginSession(albumName: String, albumId: String) {
+        if (isRecording) return
+        file.parentFile?.mkdirs()
+        file.writeText("")
+        visibleLines.clear()
+        seen.clear()
+        previous = null
+        lastScroll = 0L
+        isRecording = true
+        log("SESSION_START album=${q(albumName)} id=${q(albumId)} file=${file.absolutePath}")
+        log("NOTE: snapshots cover loaded Paging items, not the full album database.")
+    }
     @Synchronized fun log(message: String) {
         if (!isRecording) return
         val line = "${stamp()} +${SystemClock.elapsedRealtime()-started}ms $message"
