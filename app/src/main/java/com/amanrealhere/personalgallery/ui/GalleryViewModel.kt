@@ -73,7 +73,7 @@ class GalleryViewModel(
                         initialLoadSize = 90,
                         prefetchDistance = 30,
                         enablePlaceholders = false,
-                        maxSize = 240
+                        maxSize = PagingConfig.MAX_SIZE_UNBOUNDED
                     ),
                     pagingSourceFactory = {
                         database.mediaItemDao().pagingSource(albumId)
