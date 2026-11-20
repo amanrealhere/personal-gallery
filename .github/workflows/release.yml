@@ -47,13 +47,13 @@ jobs:
         run: |
           set -euo pipefail
 
-          if [[ "$SELECTED_REF" != "refs/heads/main" ]]; then
-            echo "::error::Release builds are permitted only from main."
+          if [[ "$SELECTED_REF" != "refs/heads/experiment-grid-placeholders" ]]; then
+            echo "::error::Release builds are permitted only from experiment-grid-placeholders."
             echo "Selected ref: $SELECTED_REF"
             false
           fi
 
-          echo "Selected branch: main"
+          echo "Selected branch: experiment-grid-placeholders"
 
       - name: Validate release metadata
         shell: bash
