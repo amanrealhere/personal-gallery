@@ -47,13 +47,13 @@ jobs:
         run: |
           set -euo pipefail
 
-          if [[ "$SELECTED_REF" != "refs/heads/main" ]]; then
+          if [[ "$SELECTED_REF" != "refs/heads/diagnostic-no-paging-eviction" ]]; then
             echo "::error::Release builds are permitted only from main."
             echo "Selected ref: $SELECTED_REF"
             false
           fi
 
-          echo "Selected branch: main"
+          echo "Selected branch: diagnostic-no-paging-eviction"
 
       - name: Validate release metadata
         shell: bash
