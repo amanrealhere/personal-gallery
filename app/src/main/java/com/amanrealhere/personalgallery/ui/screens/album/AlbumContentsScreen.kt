@@ -1,6 +1,15 @@
 package com.amanrealhere.personalgallery.ui.screens.album
 
 import android.view.ScaleGestureDetector
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.Button
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -39,6 +48,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.amanrealhere.personalgallery.data.local.MediaItemEntity
 import com.amanrealhere.personalgallery.domain.model.Album
 import com.amanrealhere.personalgallery.ui.components.MediaGridPagingAdapter
+import com.amanrealhere.personalgallery.ui.components.GridDiagnosticsRecorder
 import com.amanrealhere.personalgallery.ui.components.ThumbnailPreview
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collectLatest
@@ -56,11 +66,32 @@ fun AlbumContentsScreen(
     isLoading: Boolean,
     onRegenerate: () -> Unit
 ) {
+    val context = LocalContext.current
     val pagingAdapter = remember { MediaGridPagingAdapter() }
-    var loadState by remember(pagingAdapter) { mutableStateOf<CombinedLoadStates?>(null) }
-    LaunchedEffect(pagingAdapter) {
-        pagingAdapter.loadStateFlow.collect { loadState = it }
+    val diagnostics = remember(album.id) { GridDiagnosticsRecorder(context, album.name, album.id) }
+    var showDiagnostics by remember { mutableStateOf(false) }
+    val exportLogLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { uri ->
+        if (uri != null) runCatching { context.contentResolver.openOutputStream(uri)?.use { stream -> stream.write(diagnostics.readAll().toByteArray(Charsets.UTF_8)) } }
     }
+    DisposableEffect(diagnostics) {
+        diagnostics.log("ALBUM_SCREEN_COMPOSED album=${album.name} id=${album.id} count=$imageCount indexing=$isIndexing")
+        onDispose { diagnostics.log("ALBUM_SCREEN_DISPOSED"); diagnostics.stop() }
+    }
+    var loadState by remember(pagingAdapter) { mutableStateOf<CombinedLoadStates?>(null) }
+    LaunchedEffect(pagingAdapter, diagnostics) {
+        pagingAdapter.loadStateFlow.collect { states ->
+            loadState = states
+            diagnostics.log("LOAD_STATE refresh=${states.refresh} prepend=${states.prepend} append=${states.append}")
+        }
+    }
+    LaunchedEffect(pagingAdapter, diagnostics) {
+        pagingAdapter.onPagesUpdatedFlow.collect {
+            val itemsNow = pagingAdapter.snapshot().items
+            diagnostics.log("PAGING_PAGES_UPDATED loaded=${itemsNow.size} adapterCount=${pagingAdapter.itemCount}")
+            diagnostics.snapshot("pages-updated", itemsNow)
+        }
+    }
+
     var hasItems by remember(pagingAdapter) { mutableStateOf(pagingAdapter.itemCount > 0) }
     var minimumCellSizeDp by remember { mutableFloatStateOf(148f) }
     var recyclerView by remember { mutableStateOf<RecyclerView?>(null) }
@@ -71,18 +102,23 @@ fun AlbumContentsScreen(
 
     LaunchedEffect(images, pagingAdapter) {
         images.collectLatest { pagingData ->
+            diagnostics.log("PAGING_GENERATION_RECEIVED")
             pagingAdapter.submitData(pagingData)
         }
     }
 
     DisposableEffect(pagingAdapter) {
         val observer = object : RecyclerView.AdapterDataObserver() {
-            private fun update() {
+            private fun update(event: String, start: Int = -1, count: Int = -1) {
                 hasItems = pagingAdapter.itemCount > 0
+                diagnostics.adapterEvent(event, start, count, pagingAdapter.snapshot().items)
             }
-            override fun onChanged() = update()
-            override fun onItemRangeInserted(positionStart: Int, itemCount: Int) = update()
-            override fun onItemRangeRemoved(positionStart: Int, itemCount: Int) = update()
+            override fun onChanged() = update("changed")
+            override fun onItemRangeInserted(positionStart: Int, itemCount: Int) = update("inserted", positionStart, itemCount)
+            override fun onItemRangeRemoved(positionStart: Int, itemCount: Int) = update("removed", positionStart, itemCount)
+            override fun onItemRangeChanged(positionStart: Int, itemCount: Int) = update("changed-range", positionStart, itemCount)
+            override fun onItemRangeChanged(positionStart: Int, itemCount: Int, payload: Any?) = update("changed-payload", positionStart, itemCount)
+            override fun onItemRangeMoved(fromPosition: Int, toPosition: Int, itemCount: Int) = update("moved-from-$fromPosition-to-$toPosition", fromPosition, itemCount)
         }
         pagingAdapter.registerAdapterDataObserver(observer)
         hasItems = pagingAdapter.itemCount > 0
@@ -145,6 +181,17 @@ fun AlbumContentsScreen(
                         scaleDetector.onTouchEvent(event)
                         false
                     }
+                    rv.addOnScrollListener(object : RecyclerView.OnScrollListener() {
+                        override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
+                            val lm = recyclerView.layoutManager as? GridLayoutManager ?: return
+                            val first = lm.findFirstVisibleItemPosition(); val last = lm.findLastVisibleItemPosition()
+                            if (first == RecyclerView.NO_POSITION || last == RecyclerView.NO_POSITION) return
+                            val child = lm.findViewByPosition(first)
+                            val offset = (child?.top ?: recyclerView.paddingTop) - recyclerView.paddingTop
+                            val keys = (first..last).mapNotNull { position -> pagingAdapter.peek(position)?.id }
+                            diagnostics.scroll(first, last, offset, keys)
+                        }
+                    })
                     var previousWidth = 0
                     rv.addOnLayoutChangeListener { view, _, _, _, _, _, _, _, _ ->
                         val changedRv = view as RecyclerView
@@ -158,6 +205,7 @@ fun AlbumContentsScreen(
                         }
                     }
                     recyclerView = rv
+                    diagnostics.log("RECYCLERVIEW_CREATED width=${rv.width} height=${rv.height} paddingTop=${rv.paddingTop}")
                     rv
                 },
                 update = { rv ->
@@ -230,8 +278,9 @@ fun AlbumContentsScreen(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
-                            OutlinedButton(onClick = onRegenerate, enabled = !isLoading) {
-                                Text("Regenerate cover")
+                            Column(horizontalAlignment = Alignment.End) {
+                                OutlinedButton(onClick = { showDiagnostics = true }) { Text("Grid diagnostics") }
+                                OutlinedButton(onClick = onRegenerate, enabled = !isLoading) { Text("Regenerate cover") }
                             }
                         }
                     }
@@ -256,7 +305,37 @@ fun AlbumContentsScreen(
                     }
                 }
             }
+            if (!sidebarExpanded) {
+                Box(Modifier.align(Alignment.TopEnd).padding(16.dp)) {
+                    OutlinedButton(onClick = { showDiagnostics = true }) { Text("Grid diagnostics") }
+                }
+            }
         }
+    }
+
+    if (showDiagnostics) {
+        AlertDialog(
+            onDismissRequest = { showDiagnostics = false },
+            title = { Text("Grid diagnostics") },
+            text = {
+                Column(Modifier.fillMaxWidth()) {
+                    Text("Dataset changes, newly observed images, Paging load states, adapter events, and scroll positions are recorded.")
+                    Spacer(Modifier.height(8.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(onClick = { exportLogLauncher.launch("grid-diagnostics-${album.name.replace(Regex("[^A-Za-z0-9._-]"), "_")}.txt") }) { Text("Export log") }
+                        OutlinedButton(onClick = { if (diagnostics.isRecording) diagnostics.stop() else diagnostics.start() }) {
+                            Text(if (diagnostics.isRecording) "Stop recording" else "Resume recording")
+                        }
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Text("Latest ${diagnostics.visibleLines.size} lines; full log is saved privately in app storage.")
+                    Column(Modifier.fillMaxWidth().height(420.dp).verticalScroll(rememberScrollState())) {
+                        diagnostics.visibleLines.forEach { line -> Text(line, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace) }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { showDiagnostics = false }) { Text("Close") } }
+        )
     }
 }
 
