@@ -36,7 +36,7 @@ class GridDiagnosticsRecorder(context: Context, albumName: String, albumId: Stri
         else if (new.isNotEmpty()) { log("ITEMS_NEWLY_OBSERVED count=${new.size} (loaded into Paging; not proof of new files)"); new.forEach { log("ITEM id=${q(it.id)} name=${q(it.displayName)} path=${q(it.sourcePath)} bytes=${it.fileSizeBytes} modified=${it.modifiedAtEpochMillis}") } }
         if (ids.isEmpty() && old == null) log("WAITING_FOR_FIRST_ITEMS")
         if (gone.isNotEmpty()) log("ITEMS_LEFT_LOADED_SNAPSHOT count=${gone.size} ids=${gone.take(40).joinToString(",") { q(it) }}")
-        if (old?.size != ids.size || reordered) log("GRID_DATASET_CHANGE loadedCount=${old?.size ?: "baseline"}->${ids.size} reordered=$reordered")
+        if (old != null && (old.size != ids.size || reordered)) log("GRID_DATASET_CHANGE loadedCount=${old.size}->${ids.size} reordered=$reordered")
         if (reordered) log("GRID_ORDER_CHANGED ids=${ids.take(80).joinToString(",") { q(it) }}")
         seen.addAll(ids); if (ids.isNotEmpty() || old != null) previous = ids
     }
