@@ -163,6 +163,9 @@ fun AlbumContentsScreen(
     val density = LocalDensity.current
     val overlayBottomGapPx = with(density) { 10.dp.roundToPx() }
     var topOverlayHeightPx by remember { mutableStateOf(0) }
+    LaunchedEffect(sidebarExpanded) {
+        if (!sidebarExpanded) topOverlayHeightPx = 0
+    }
 
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Box(Modifier.fillMaxSize().clipToBounds()) {
@@ -304,7 +307,6 @@ fun AlbumContentsScreen(
                 }
             } else {
                 // Collapsed-mode header is a RecyclerView item and scrolls away naturally.
-                if (topOverlayHeightPx != 0) topOverlayHeightPx = 0
             }
         }
     }
