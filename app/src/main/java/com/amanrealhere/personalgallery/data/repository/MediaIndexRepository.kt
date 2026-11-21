@@ -54,19 +54,20 @@ class MediaIndexRepository(private val mediaItemDao: MediaItemDao) {
                 }
                 for (child in children) {
                     currentCoroutineContext().ensureActive()
-                    if (Files.isSymbolicLink(child.toPath())) continue
-                    if (child.isDirectory) {
+                    // Read each entry's attributes once. This avoids separate isSymlink,
+                    // isDirectory, isFile, canonicalPath, length and lastModified calls.
+                    val attributes = try {
+                        Files.readAttributes(child.toPath(), BasicFileAttributes::class.java)
+                    } catch (_: Exception) {
+                        complete = false
+                        continue
+                    }
+                    if (attributes.isSymbolicLink) continue
+                    if (attributes.isDirectory) {
                         if (child.name != ".personal-gallery") pendingDirectories.add(child)
-                    } else if (child.extension.lowercase() in SUPPORTED_EXTENSIONS) {
-                        // One metadata read per supported file; the folder is canonical and
-                        // symlinks are skipped, so the child's absolute path is sufficient.
-                        val attributes = try {
-                            Files.readAttributes(child.toPath(), BasicFileAttributes::class.java)
-                        } catch (_: Exception) {
-                            complete = false
-                            continue
-                        }
-                        if (!attributes.isRegularFile) continue
+                    } else if (attributes.isRegularFile && child.extension.lowercase() in SUPPORTED_EXTENSIONS) {
+                        // The registered album root is canonical and symlinks are skipped,
+                        // so the absolute child path is a stable identity without realpath().
                         val absolutePath = child.absolutePath
                         batch += MediaItemStagingEntity(
                             scanToken = scanToken,
