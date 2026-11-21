@@ -434,6 +434,7 @@ private class CollapsedAlbumHeaderAdapter(
                 RecyclerView.LayoutParams.MATCH_PARENT,
                 RecyclerView.LayoutParams.WRAP_CONTENT
             )
+            id = View.generateViewId()
             setContent {
                 AlbumHeader(
                     albumName = albumName,
@@ -450,6 +451,11 @@ private class CollapsedAlbumHeaderAdapter(
 
     override fun onBindViewHolder(holder: HeaderViewHolder, position: Int) {
         holder.itemView.visibility = if (visible) View.VISIBLE else View.GONE
+    }
+
+    override fun onViewRecycled(holder: HeaderViewHolder) {
+        holder.composeView.disposeComposition()
+        super.onViewRecycled(holder)
     }
 
     class HeaderViewHolder(val composeView: ComposeView) : RecyclerView.ViewHolder(composeView)
