@@ -119,11 +119,11 @@ fun AlbumContentsScreen(
     }
     SideEffect {
         headerAdapter.update(
-        albumName = album.name,
-        imageCount = stableImageCount,
-        isLoading = isLoading,
-        progressMessage = progressMessage,
-        visible = !sidebarExpanded
+            albumName = album.name,
+            imageCount = stableImageCount,
+            isLoading = isLoading,
+            progressMessage = progressMessage,
+            visible = !sidebarExpanded
         )
     }
     val concatAdapter = remember(headerAdapter, pagingAdapter) { ConcatAdapter(headerAdapter, pagingAdapter) }
@@ -305,8 +305,6 @@ fun AlbumContentsScreen(
                         onRegenerate = onRegenerate
                     )
                 }
-            } else {
-                // Collapsed-mode header is a RecyclerView item and scrolls away naturally.
             }
         }
     }
