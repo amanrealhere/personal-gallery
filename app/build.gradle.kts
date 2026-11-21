@@ -20,6 +20,18 @@ android {
         versionName = "2.1"
     }
 
+    buildTypes {
+        release {
+            // Optimize only release builds; keep debug builds easy to diagnose.
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+        }
+    }
+
     buildFeatures {
         compose = true
     }
