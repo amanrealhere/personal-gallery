@@ -9,8 +9,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Menu
@@ -24,16 +26,21 @@ import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import com.amanrealhere.personalgallery.R
+import com.amanrealhere.personalgallery.data.local.AlbumThumbnailStateEntity
 import com.amanrealhere.personalgallery.domain.model.Album
+import com.amanrealhere.personalgallery.ui.components.ThumbnailPreview
 
 @Composable
 fun AlbumsSidebar(
     sidebarExpanded: Boolean,
     albums: List<Album>,
+    thumbnailStates: List<AlbumThumbnailStateEntity>,
     selectedAlbumPath: String?,
     isAlbumsOverviewSelected: Boolean,
     isAddAlbumSelected: Boolean,
@@ -42,6 +49,10 @@ fun AlbumsSidebar(
     onAddAlbumClick: () -> Unit,
     onAlbumClick: (Album) -> Unit
 ) {
+    val thumbnailStatesByAlbumId = remember(thumbnailStates) {
+        thumbnailStates.associateBy { it.albumId }
+    }
+
     Surface(
         modifier = Modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.surfaceContainerLow
@@ -147,7 +158,7 @@ fun AlbumsSidebar(
 
             if (sidebarExpanded) {
                 Text(
-                    text = "YOUR ALBUMS",
+                    text = "COLLECTIONS",
                     modifier = Modifier.padding(
                         start = 16.dp,
                         top = 22.dp,
@@ -168,17 +179,31 @@ fun AlbumsSidebar(
                     items = albums,
                     key = { album -> album.id }
                 ) { album ->
+                    val thumbnailState = thumbnailStatesByAlbumId[album.id]
                     NavigationDrawerItem(
                         label = {
-                            Text(
-                                text = if (sidebarExpanded) album.name else "",
-                                maxLines = 1
-                            )
+                            if (sidebarExpanded) {
+                                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                    Text(
+                                        text = album.name,
+                                        maxLines = 1
+                                    )
+                                    Text(
+                                        text = "${thumbnailState?.imageCount ?: 0} ${if (thumbnailState?.imageCount == 1) "photo" else "photos"}",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1
+                                    )
+                                }
+                            }
                         },
                         icon = {
-                            Image(
-                                painter = painterResource(R.drawable.ic_gallery_folder),
-                                contentDescription = album.name
+                            ThumbnailPreview(
+                                path = thumbnailState?.coverThumbnailPath,
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(RoundedCornerShape(10.dp)),
+                                showFolderPlaceholder = true
                             )
                         },
                         selected = selectedAlbumPath == album.canonicalPath,
