@@ -118,6 +118,7 @@ class MediaGridItemView(context: android.content.Context) : FrameLayout(context)
     fun clear() {
         Glide.with(thumbnail).clear(thumbnail)
         thumbnail.setImageDrawable(null)
+        filename.text = ""
         currentRequestKey = null
     }
 }
