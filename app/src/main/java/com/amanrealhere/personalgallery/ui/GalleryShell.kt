@@ -124,8 +124,7 @@ fun GalleryShell(viewModel: GalleryViewModel) {
         }
     }
 
-    // Album indexing runs before Paging is opened; do not rescan on resume
-    // and inject new rows into an actively browsed grid.
+    // Reconcile on album selection only; avoid restarting the scan on resume.
     val sidebarWidth by animateDpAsState(
         targetValue = if (sidebarExpanded) 280.dp else 76.dp,
         animationSpec = tween(durationMillis = 180, easing = FastOutSlowInEasing),
