@@ -60,9 +60,9 @@ class MediaGridItemView(context: android.content.Context) : FrameLayout(context)
         val density = resources.displayMetrics.density
         fun dp(value: Int) = (value * density).toInt()
 
-        setPadding(dp(6), dp(6), dp(6), dp(6))
+        setPadding(dp(4), dp(4), dp(4), dp(4))
         background = GradientDrawable().apply {
-            cornerRadius = dp(10).toFloat()
+            cornerRadius = dp(12).toFloat()
             setColor(0xFF242424.toInt())
         }
         clipToOutline = true
@@ -75,10 +75,11 @@ class MediaGridItemView(context: android.content.Context) : FrameLayout(context)
 
         filename.apply {
             setTextColor(0xFFEAEAEA.toInt())
-            textSize = 13f
+            textSize = 12f
             maxLines = 2
             ellipsize = android.text.TextUtils.TruncateAt.END
-            setPadding(dp(8), dp(5), dp(8), dp(8))
+            setPadding(dp(8), dp(6), dp(8), dp(7))
+            setShadowLayer(dp(1).toFloat(), 0f, dp(1).toFloat(), 0xCC000000.toInt())
             background = GradientDrawable(
                 GradientDrawable.Orientation.TOP_BOTTOM,
                 intArrayOf(0x00000000, 0xD9000000.toInt())

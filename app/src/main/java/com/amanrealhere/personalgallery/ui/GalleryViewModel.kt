@@ -99,6 +99,13 @@ class GalleryViewModel(
 
     private val _liveScanImageCount = MutableStateFlow(0)
     val liveScanImageCount: StateFlow<Int> = _liveScanImageCount.asStateFlow()
+
+    // Distinguish exact completed scans from partial scans and stale catalogue counts.
+    private val _scanFinished = MutableStateFlow(false)
+    val scanFinished: StateFlow<Boolean> = _scanFinished.asStateFlow()
+    private val _scanComplete = MutableStateFlow(false)
+    val scanComplete: StateFlow<Boolean> = _scanComplete.asStateFlow()
+
     private var indexingJob: Job? = null
     private var indexingAlbumId: String? = null
 
@@ -136,20 +143,32 @@ class GalleryViewModel(
         selectedAlbumId.value = album.id
         indexingAlbumId = album.id
         _liveScanImageCount.value = 0
+        _scanFinished.value = false
+        _scanComplete.value = false
         _isIndexingAlbum.value = true
         indexingJob = viewModelScope.launch(Dispatchers.IO) {
             try {
-                mediaIndexRepository.reconcileAlbum(
+                val result = mediaIndexRepository.reconcileAlbum(
                     albumId = album.id,
                     folder = File(album.canonicalPath),
                     onProgress = { count ->
                         if (indexingAlbumId == album.id) _liveScanImageCount.value = count
                     }
                 )
+                if (indexingAlbumId == album.id) {
+                    _scanFinished.value = true
+                    _scanComplete.value = result is MediaIndexRepository.ScanResult.Completed && result.complete
+                    if (result is MediaIndexRepository.ScanResult.Unavailable) _liveScanImageCount.value = 0
+                }
             } catch (exception: CancellationException) {
                 throw exception
             } catch (_: Exception) {
-                // If scanning fails, still show the last successfully indexed catalogue.
+                // Failed scans fall back to the last successfully indexed catalogue count.
+                if (indexingAlbumId == album.id) {
+                    _liveScanImageCount.value = 0
+                    _scanFinished.value = true
+                    _scanComplete.value = false
+                }
             } finally {
                 if (indexingAlbumId == album.id && indexingJob?.isActive == true) {
                     _isIndexingAlbum.value = false
@@ -169,6 +188,8 @@ class GalleryViewModel(
         indexingAlbumId = null
         _isIndexingAlbum.value = false
         _liveScanImageCount.value = 0
+        _scanFinished.value = false
+        _scanComplete.value = false
         selectedAlbumId.value = null
     }
 

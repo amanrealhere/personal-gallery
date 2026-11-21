@@ -1,13 +1,5 @@
 package com.amanrealhere.personalgallery.ui
 
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.SizeTransform
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.togetherWith
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
@@ -70,43 +62,30 @@ fun AlbumsSidebar(
         modifier = Modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.surfaceContainerLow
     ) {
-        AnimatedContent(
-            targetState = sidebarExpanded,
-            transitionSpec = {
-                (fadeIn(tween(180)) + slideInHorizontally(tween(220)) { width ->
-                    if (targetState) -width / 8 else width / 8
-                }) togetherWith
-                    (fadeOut(tween(120)) + slideOutHorizontally(tween(160)) { width ->
-                        if (targetState) width / 8 else -width / 8
-                    }) using SizeTransform(clip = false)
-            },
-            label = "sidebar content"
-        ) { expanded ->
-            if (expanded) {
-                ExpandedAlbumsSidebar(
-                    albums = albums,
-                    thumbnailStatesByAlbumId = thumbnailStatesByAlbumId,
-                    selectedAlbumPath = selectedAlbumPath,
-                    isAlbumsOverviewSelected = isAlbumsOverviewSelected,
-                    isAddAlbumSelected = isAddAlbumSelected,
-                    onToggleSidebar = onToggleSidebar,
-                    onAlbumsClick = onAlbumsClick,
-                    onAddAlbumClick = onAddAlbumClick,
-                    onAlbumClick = onAlbumClick
-                )
-            } else {
-                CollapsedAlbumsSidebar(
-                    albums = albums,
-                    thumbnailStatesByAlbumId = thumbnailStatesByAlbumId,
-                    selectedAlbumPath = selectedAlbumPath,
-                    isAlbumsOverviewSelected = isAlbumsOverviewSelected,
-                    isAddAlbumSelected = isAddAlbumSelected,
-                    onToggleSidebar = onToggleSidebar,
-                    onAlbumsClick = onAlbumsClick,
-                    onAddAlbumClick = onAddAlbumClick,
-                    onAlbumClick = onAlbumClick
-                )
-            }
+        if (sidebarExpanded) {
+            ExpandedAlbumsSidebar(
+                albums = albums,
+                thumbnailStatesByAlbumId = thumbnailStatesByAlbumId,
+                selectedAlbumPath = selectedAlbumPath,
+                isAlbumsOverviewSelected = isAlbumsOverviewSelected,
+                isAddAlbumSelected = isAddAlbumSelected,
+                onToggleSidebar = onToggleSidebar,
+                onAlbumsClick = onAlbumsClick,
+                onAddAlbumClick = onAddAlbumClick,
+                onAlbumClick = onAlbumClick
+            )
+        } else {
+            CollapsedAlbumsSidebar(
+                albums = albums,
+                thumbnailStatesByAlbumId = thumbnailStatesByAlbumId,
+                selectedAlbumPath = selectedAlbumPath,
+                isAlbumsOverviewSelected = isAlbumsOverviewSelected,
+                isAddAlbumSelected = isAddAlbumSelected,
+                onToggleSidebar = onToggleSidebar,
+                onAlbumsClick = onAlbumsClick,
+                onAddAlbumClick = onAddAlbumClick,
+                onAlbumClick = onAlbumClick
+            )
         }
     }
 }

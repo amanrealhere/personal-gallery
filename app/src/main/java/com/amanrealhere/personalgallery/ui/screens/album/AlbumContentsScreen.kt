@@ -59,6 +59,8 @@ fun AlbumContentsScreen(
     imageCount: Int,
     liveScanImageCount: Int,
     isIndexing: Boolean,
+    scanFinished: Boolean,
+    scanComplete: Boolean,
     coverPath: String?,
     progressMessage: String?,
     isLoading: Boolean,
@@ -89,7 +91,14 @@ fun AlbumContentsScreen(
 
     var minimumCellSizeDp by remember { mutableFloatStateOf(148f) }
     var recyclerView by remember { mutableStateOf<RecyclerView?>(null) }
-    var stableImageCount by remember(album.id) { mutableStateOf(imageCount) }
+
+    // While scanning, report discoveries rather than presenting the previous catalogue total as current.
+    val headerCountLabel = when {
+        isIndexing -> if (liveScanImageCount == 0) "Scanning…" else "${liveScanImageCount} found"
+        scanFinished && scanComplete -> "${liveScanImageCount} ${if (liveScanImageCount == 1) "image" else "images"}"
+        scanFinished && liveScanImageCount > 0 -> "≥ ${liveScanImageCount} found"
+        else -> "${imageCount} ${if (imageCount == 1) "image" else "images"}"
+    }
 
     // Header remains adapter position 0 at all times. When not needed it is GONE,
     // rather than inserted/removed, so grid positions never shift during sidebar
@@ -97,7 +106,7 @@ fun AlbumContentsScreen(
     val headerAdapter = remember(album.id) {
         CollapsedAlbumHeaderAdapter(
             albumName = album.name,
-            imageCount = stableImageCount,
+            countLabel = headerCountLabel,
             isLoading = isLoading,
             progressMessage = progressMessage,
             visible = !sidebarExpanded,
@@ -107,7 +116,7 @@ fun AlbumContentsScreen(
     SideEffect {
         headerAdapter.update(
             albumName = album.name,
-            imageCount = stableImageCount,
+            countLabel = headerCountLabel,
             isLoading = isLoading,
             progressMessage = progressMessage,
             visible = !sidebarExpanded
@@ -115,11 +124,6 @@ fun AlbumContentsScreen(
     }
     val concatAdapter = remember(headerAdapter, pagingAdapter) {
         ConcatAdapter(headerAdapter, pagingAdapter)
-    }
-
-    LaunchedEffect(imageCount, liveScanImageCount, isIndexing, album.id) {
-        val bestAvailableCount = maxOf(imageCount, liveScanImageCount)
-        if (bestAvailableCount > 0 || !isIndexing) stableImageCount = bestAvailableCount
     }
 
     LaunchedEffect(images, pagingAdapter) {
@@ -254,7 +258,7 @@ fun AlbumContentsScreen(
                 ) {
                     AlbumHeader(
                         albumName = album.name,
-                        imageCount = stableImageCount,
+                        countLabel = headerCountLabel,
                         isLoading = isLoading,
                         progressMessage = progressMessage,
                         collapsedStyle = false,
@@ -292,7 +296,7 @@ private fun calculateSpanCount(
 ): Int {
     if (widthPx <= 0) return 1
     val availableDp = (widthPx - paddingLeftPx - paddingRightPx) / density
-    val spacingDp = 12f
+    val spacingDp = 8f
     return floor((availableDp + spacingDp) / (minimumCellSizeDp + spacingDp))
         .toInt()
         .coerceAtLeast(1)
@@ -322,7 +326,7 @@ private fun updateGridSpanCount(
 @Composable
 private fun AlbumHeader(
     albumName: String,
-    imageCount: Int,
+    countLabel: String,
     isLoading: Boolean,
     progressMessage: String?,
     collapsedStyle: Boolean,
@@ -352,7 +356,7 @@ private fun AlbumHeader(
                     )
                     Surface(shape = RoundedCornerShape(50.dp), color = MaterialTheme.colorScheme.secondaryContainer) {
                         Text(
-                            text = "$imageCount ${if (imageCount == 1) "image" else "images"}",
+                            text = countLabel,
                             modifier = Modifier.padding(
                                 horizontal = if (collapsedStyle) 14.dp else 10.dp,
                                 vertical = if (collapsedStyle) 7.dp else 4.dp
@@ -393,33 +397,33 @@ private fun AlbumHeader(
 
 private class CollapsedAlbumHeaderAdapter(
     albumName: String,
-    imageCount: Int,
+    countLabel: String,
     isLoading: Boolean,
     progressMessage: String?,
     visible: Boolean,
     private val onRegenerate: () -> Unit
 ) : RecyclerView.Adapter<CollapsedAlbumHeaderAdapter.HeaderViewHolder>() {
     private var albumName by mutableStateOf(albumName)
-    private var imageCount by mutableStateOf(imageCount)
+    private var countLabel by mutableStateOf(countLabel)
     private var isLoading by mutableStateOf(isLoading)
     private var progressMessage by mutableStateOf(progressMessage)
     private var visible by mutableStateOf(visible)
 
     fun update(
         albumName: String,
-        imageCount: Int,
+        countLabel: String,
         isLoading: Boolean,
         progressMessage: String?,
         visible: Boolean
     ) {
         val changed = this.albumName != albumName ||
-            this.imageCount != imageCount ||
+            this.countLabel != countLabel ||
             this.isLoading != isLoading ||
             this.progressMessage != progressMessage ||
             this.visible != visible
         if (!changed) return
         this.albumName = albumName
-        this.imageCount = imageCount
+        this.countLabel = countLabel
         this.isLoading = isLoading
         this.progressMessage = progressMessage
         this.visible = visible
@@ -440,7 +444,7 @@ private class CollapsedAlbumHeaderAdapter(
             setContent {
                 AlbumHeader(
                     albumName = albumName,
-                    imageCount = imageCount,
+                    countLabel = countLabel,
                     isLoading = isLoading,
                     progressMessage = progressMessage,
                     collapsedStyle = true,

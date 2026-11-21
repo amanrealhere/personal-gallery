@@ -54,6 +54,8 @@ fun GalleryShell(viewModel: GalleryViewModel) {
     val isIndexingAlbum by viewModel.isIndexingAlbum.collectAsStateWithLifecycle()
     val indexedImageCount by viewModel.albumImageCount.collectAsStateWithLifecycle()
     val liveScanImageCount by viewModel.liveScanImageCount.collectAsStateWithLifecycle()
+    val scanFinished by viewModel.scanFinished.collectAsStateWithLifecycle()
+    val scanComplete by viewModel.scanComplete.collectAsStateWithLifecycle()
     val workInfos by viewModel.thumbnailWorkInfos.collectAsStateWithLifecycle(initialValue = emptyList())
 
     val selectedAlbum = remember(albums, selectedAlbumPath) {
@@ -126,7 +128,7 @@ fun GalleryShell(viewModel: GalleryViewModel) {
     // and inject new rows into an actively browsed grid.
     val sidebarWidth by animateDpAsState(
         targetValue = if (sidebarExpanded) 280.dp else 76.dp,
-        animationSpec = tween(durationMillis = 260, easing = FastOutSlowInEasing),
+        animationSpec = tween(durationMillis = 160, easing = FastOutSlowInEasing),
         label = "sidebar width"
     )
 
@@ -188,6 +190,8 @@ fun GalleryShell(viewModel: GalleryViewModel) {
                                 imageCount = indexedImageCount,
                                 liveScanImageCount = liveScanImageCount,
                                 isIndexing = isIndexingAlbum,
+                                scanFinished = scanFinished,
+                                scanComplete = scanComplete,
                                 coverPath = selectedState?.coverThumbnailPath,
                                 progressMessage = progressMessage,
                                 isLoading = isGenerating,

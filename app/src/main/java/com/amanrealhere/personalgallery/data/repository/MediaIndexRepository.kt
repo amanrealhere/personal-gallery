@@ -96,7 +96,7 @@ class MediaIndexRepository(private val mediaItemDao: MediaItemDao) {
 
     companion object {
         private const val BATCH_SIZE = 256
-        private const val PROGRESS_INTERVAL = 64
+        private const val PROGRESS_INTERVAL = 16
         private val SUPPORTED_EXTENSIONS = setOf("jpg", "jpeg", "png", "webp")
     }
 }
