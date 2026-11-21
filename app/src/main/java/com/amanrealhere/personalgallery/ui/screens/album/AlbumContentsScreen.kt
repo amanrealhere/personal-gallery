@@ -515,7 +515,6 @@ private class CollapsedAlbumHeaderAdapter(
             orientation = LinearLayout.HORIZONTAL
             gravity = android.view.Gravity.CENTER_VERTICAL
         }
-        row.addView(title, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         val diag = Button(parent.context).apply { text = "Diagnostics"; setOnClickListener { onDiagnostics() } }
         val regen = Button(parent.context).apply { text = "Refresh"; setOnClickListener { onRegenerate() } }
         row.addView(diag)
