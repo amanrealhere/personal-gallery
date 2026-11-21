@@ -36,6 +36,11 @@ class MediaGridPagingAdapter :
         super.onViewRecycled(holder)
     }
 
+    /** Requests Paging's access hint for an item without exposing PagingDataAdapter.getItem(). */
+    fun requestLoad(position: Int) {
+        if (position in 0 until itemCount) getItem(position)
+    }
+
     class MediaViewHolder(private val cell: MediaGridItemView) : RecyclerView.ViewHolder(cell) {
         fun bind(media: MediaItemEntity) = cell.bind(media)
         fun clear() = cell.clear()
