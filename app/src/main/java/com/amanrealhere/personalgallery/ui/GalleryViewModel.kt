@@ -72,7 +72,7 @@ class GalleryViewModel(
                         pageSize = 60,
                         initialLoadSize = 90,
                         prefetchDistance = 30,
-                        enablePlaceholders = false,
+                        enablePlaceholders = true,
                         maxSize = 240
                     ),
                     pagingSourceFactory = {
