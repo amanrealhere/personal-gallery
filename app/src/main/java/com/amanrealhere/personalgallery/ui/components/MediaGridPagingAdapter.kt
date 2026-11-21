@@ -63,13 +63,14 @@ class MediaGridItemView(context: android.content.Context) : FrameLayout(context)
         setPadding(dp(4), dp(4), dp(4), dp(4))
         background = GradientDrawable().apply {
             cornerRadius = dp(12).toFloat()
-            setColor(0xFF242424.toInt())
+            setColor(0xFF202020.toInt())
+            setStroke(dp(1), 0xFF353535.toInt())
         }
         clipToOutline = true
 
         thumbnail.apply {
             scaleType = ImageView.ScaleType.CENTER_CROP
-            setBackgroundColor(0xFF242424.toInt())
+            setBackgroundColor(0xFF1B1B1B.toInt())
         }
         addView(thumbnail, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
 
@@ -100,7 +101,7 @@ class MediaGridItemView(context: android.content.Context) : FrameLayout(context)
     fun bind(media: MediaItemEntity) {
         filename.text = media.displayName
         val cacheKey = "${media.sourceCanonicalPath}|${media.fileSizeBytes}|" +
-            "${media.modifiedAtEpochMillis}|grid-center-crop-v1"
+            "${media.modifiedAtEpochMillis}|grid-center-crop-224dp-v2"
         val requestKey = "${media.sourcePath}|$cacheKey"
         if (currentRequestKey == requestKey) return
 
@@ -109,6 +110,7 @@ class MediaGridItemView(context: android.content.Context) : FrameLayout(context)
             .load(File(media.sourcePath))
             .signature(ObjectKey(cacheKey))
             .diskCacheStrategy(DiskCacheStrategy.RESOURCE)
+            .override((224f * resources.displayMetrics.density).toInt())
             .centerCrop()
             .dontAnimate()
             .placeholder(android.graphics.drawable.ColorDrawable(0xFF242424.toInt()))

@@ -9,6 +9,7 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.nio.file.Files
+import java.nio.file.attribute.BasicFileAttributes
 import java.util.UUID
 
 /**
@@ -56,17 +57,26 @@ class MediaIndexRepository(private val mediaItemDao: MediaItemDao) {
                     if (Files.isSymbolicLink(child.toPath())) continue
                     if (child.isDirectory) {
                         if (child.name != ".personal-gallery") pendingDirectories.add(child)
-                    } else if (child.isFile && child.extension.lowercase() in SUPPORTED_EXTENSIONS) {
-                        val canonicalPath = runCatching { child.canonicalPath }.getOrDefault(child.absolutePath)
+                    } else if (child.extension.lowercase() in SUPPORTED_EXTENSIONS) {
+                        // One metadata read per supported file; the folder is canonical and
+                        // symlinks are skipped, so the child's absolute path is sufficient.
+                        val attributes = try {
+                            Files.readAttributes(child.toPath(), BasicFileAttributes::class.java)
+                        } catch (_: Exception) {
+                            complete = false
+                            continue
+                        }
+                        if (!attributes.isRegularFile) continue
+                        val absolutePath = child.absolutePath
                         batch += MediaItemStagingEntity(
                             scanToken = scanToken,
-                            id = "$albumId:$canonicalPath",
+                            id = "$albumId:$absolutePath",
                             albumId = albumId,
-                            sourcePath = child.absolutePath,
-                            sourceCanonicalPath = canonicalPath,
+                            sourcePath = absolutePath,
+                            sourceCanonicalPath = absolutePath,
                             displayName = child.name,
-                            fileSizeBytes = child.length(),
-                            modifiedAtEpochMillis = child.lastModified()
+                            fileSizeBytes = attributes.size(),
+                            modifiedAtEpochMillis = attributes.lastModifiedTime().toMillis()
                         )
                         indexed++
                         if (indexed == 1 || indexed % PROGRESS_INTERVAL == 0) onProgress(indexed)
@@ -96,7 +106,8 @@ class MediaIndexRepository(private val mediaItemDao: MediaItemDao) {
 
     companion object {
         private const val BATCH_SIZE = 256
-        private const val PROGRESS_INTERVAL = 16
+        // Keep UI/StateFlow progress traffic low; frequent updates were slowing the scan.
+        private const val PROGRESS_INTERVAL = 128
         private val SUPPORTED_EXTENSIONS = setOf("jpg", "jpeg", "png", "webp")
     }
 }

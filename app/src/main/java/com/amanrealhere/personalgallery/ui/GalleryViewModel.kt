@@ -69,9 +69,9 @@ class GalleryViewModel(
             } else {
                 Pager(
                     config = PagingConfig(
-                        pageSize = 60,
-                        initialLoadSize = 90,
-                        prefetchDistance = 30,
+                        pageSize = 48,
+                        initialLoadSize = 48,
+                        prefetchDistance = 24,
                         enablePlaceholders = true,
                         maxSize = 240
                     ),

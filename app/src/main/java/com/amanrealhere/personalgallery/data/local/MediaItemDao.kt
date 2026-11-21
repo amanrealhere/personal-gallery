@@ -50,7 +50,7 @@ interface MediaItemDao {
 
     @Query("""
         SELECT * FROM media_items WHERE albumId = :albumId
-        ORDER BY modifiedAtEpochMillis DESC, sourcePath ASC
+        ORDER BY modifiedAtEpochMillis DESC, sourcePath DESC
     """)
     fun pagingSource(albumId: String): PagingSource<Int, MediaItemEntity>
 
