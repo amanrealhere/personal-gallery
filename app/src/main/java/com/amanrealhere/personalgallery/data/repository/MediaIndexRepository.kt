@@ -54,8 +54,13 @@ class MediaIndexRepository(private val mediaItemDao: MediaItemDao) {
                 }
                 for (child in children) {
                     currentCoroutineContext().ensureActive()
-                    // Read each entry's attributes once. This avoids separate isSymlink,
-                    // isDirectory, isFile, canonicalPath, length and lastModified calls.
+                    if (child.name == ".personal-gallery") continue
+                    val isImageCandidate = child.extension.lowercase() in SUPPORTED_EXTENSIONS
+                    if (!isImageCandidate) {
+                        // Skip full NIO attribute reads for files outside the supported image types.
+                        if (child.isDirectory && !Files.isSymbolicLink(child.toPath())) pendingDirectories.add(child)
+                        continue
+                    }
                     val attributes = try {
                         Files.readAttributes(child.toPath(), BasicFileAttributes::class.java)
                     } catch (_: Exception) {
@@ -63,9 +68,8 @@ class MediaIndexRepository(private val mediaItemDao: MediaItemDao) {
                         continue
                     }
                     if (attributes.isSymbolicLink) continue
-                    if (attributes.isDirectory) {
-                        if (child.name != ".personal-gallery") pendingDirectories.add(child)
-                    } else if (attributes.isRegularFile && child.extension.lowercase() in SUPPORTED_EXTENSIONS) {
+                    if (attributes.isDirectory) pendingDirectories.add(child)
+                    else if (attributes.isRegularFile) {
                         // The registered album root is canonical and symlinks are skipped,
                         // so the absolute child path is a stable identity without realpath().
                         val absolutePath = child.absolutePath
@@ -81,14 +85,16 @@ class MediaIndexRepository(private val mediaItemDao: MediaItemDao) {
                         )
                         indexed++
                         if (indexed == 1 || indexed % PROGRESS_INTERVAL == 0) onProgress(indexed)
-                        if (batch.size >= BATCH_SIZE) {
-                            mediaItemDao.insertStaging(batch.toList())
+                        val batchLimit = if (indexed <= INITIAL_BATCH_SIZE) INITIAL_BATCH_SIZE else BATCH_SIZE
+                        if (batch.size >= batchLimit) {
+                            mediaItemDao.insertStaging(batch)
+                            mediaItemDao.applyStagedBatch(albumId, scanToken, batch.map { it.id })
                             batch.clear()
                         }
                     }
                 }
             }
-            if (batch.isNotEmpty()) mediaItemDao.insertStaging(batch.toList())
+            if (batch.isNotEmpty()) mediaItemDao.insertStaging(batch)
             onProgress(indexed)
             mediaItemDao.finishStagedScan(albumId, scanToken, complete)
             finalized = true
@@ -106,9 +112,10 @@ class MediaIndexRepository(private val mediaItemDao: MediaItemDao) {
     }
 
     companion object {
-        private const val BATCH_SIZE = 256
-        // Keep UI/StateFlow progress traffic low; frequent updates were slowing the scan.
-        private const val PROGRESS_INTERVAL = 128
+        private const val INITIAL_BATCH_SIZE = 64
+        private const val BATCH_SIZE = 512
+        // Keep UI/StateFlow progress traffic low while indexing large albums.
+        private const val PROGRESS_INTERVAL = 256
         private val SUPPORTED_EXTENSIONS = setOf("jpg", "jpeg", "png", "webp")
     }
 }
