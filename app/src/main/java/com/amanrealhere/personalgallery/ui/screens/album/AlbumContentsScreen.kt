@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -37,6 +38,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -49,7 +51,6 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.setContent
 import androidx.recyclerview.widget.ConcatAdapter
-import androidx.compose.ui.unit.size
 import androidx.paging.CombinedLoadStates
 import androidx.paging.PagingData
 import androidx.recyclerview.widget.GridLayoutManager
@@ -105,7 +106,7 @@ fun AlbumContentsScreen(
     var minimumCellSizeDp by remember { mutableFloatStateOf(148f) }
     var recyclerView by remember { mutableStateOf<RecyclerView?>(null) }
     var stableImageCount by remember(album.id) { mutableStateOf(imageCount) }
-    val headerAdapter = remember(album.id, sidebarExpanded) {
+    val headerAdapter = remember(album.id) {
         CollapsedAlbumHeaderAdapter(
             albumName = album.name,
             imageCount = stableImageCount,
@@ -116,13 +117,15 @@ fun AlbumContentsScreen(
             onRegenerate = onRegenerate
         )
     }
-    headerAdapter.update(
+    SideEffect {
+        headerAdapter.update(
         albumName = album.name,
         imageCount = stableImageCount,
         isLoading = isLoading,
         progressMessage = progressMessage,
         visible = !sidebarExpanded
-    )
+        )
+    }
     val concatAdapter = remember(headerAdapter, pagingAdapter) { ConcatAdapter(headerAdapter, pagingAdapter) }
     LaunchedEffect(imageCount, isIndexing, album.id) {
         if (imageCount > 0 || !isIndexing) stableImageCount = imageCount
@@ -171,24 +174,25 @@ fun AlbumContentsScreen(
                         clipToPadding = false
                         setPadding(
                             (18f * viewDensity).toInt(),
-                            topOverlayHeightPx + overlayBottomGapPx,
+                            if (sidebarExpanded) topOverlayHeightPx + overlayBottomGapPx else 0,
                             (18f * viewDensity).toInt(),
                             (18f * viewDensity).toInt()
                         )
                         setHasFixedSize(true)
                         setItemViewCacheSize(4)
                         itemAnimator = null
-                        layoutManager = GridLayoutManager(
+                        val gridLayoutManager = GridLayoutManager(
                             viewContext,
                             calculateSpanCount(width, paddingLeft, paddingRight, viewDensity, minimumCellSizeDp)
                         ).apply {
                             isItemPrefetchEnabled = true
                         }
-                        adapter = concatAdapter
-                        (layoutManager as GridLayoutManager).spanSizeLookup = object : GridLayoutManager.SpanSizeLookup() {
+                        gridLayoutManager.spanSizeLookup = object : GridLayoutManager.SpanSizeLookup() {
                             override fun getSpanSize(position: Int): Int =
-                                if (position < headerAdapter.itemCount) spanCount else 1
+                                if (position < headerAdapter.itemCount) gridLayoutManager.spanCount else 1
                         }
+                        layoutManager = gridLayoutManager
+                        adapter = concatAdapter
                     }
 
                     val scaleDetector = ScaleGestureDetector(
