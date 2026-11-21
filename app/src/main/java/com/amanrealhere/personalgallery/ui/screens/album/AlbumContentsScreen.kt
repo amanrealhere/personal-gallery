@@ -90,7 +90,7 @@ fun AlbumContentsScreen(
                 hasItems = pagingAdapter.itemCount > 0
                 if (!initialPagingAccessHintSent && pagingAdapter.itemCount > 0) {
                     initialPagingAccessHintSent = true
-                    pagingAdapter.getItem(0)
+                    pagingAdapter.requestLoad(0)
                 }
             }
             override fun onChanged() = update()
@@ -227,7 +227,7 @@ fun AlbumContentsScreen(
                     recyclerView = rv
                     // Explicitly send an initial access hint after attachment.
                     rv.post {
-                        if (pagingAdapter.itemCount > 0) pagingAdapter.getItem(0)
+                        if (pagingAdapter.itemCount > 0) pagingAdapter.requestLoad(0)
                         rv.requestLayout()
                     }
                     rv
