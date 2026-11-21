@@ -96,6 +96,9 @@ class GalleryViewModel(
 
     private val _isIndexingAlbum = MutableStateFlow(false)
     val isIndexingAlbum: StateFlow<Boolean> = _isIndexingAlbum.asStateFlow()
+
+    private val _liveScanImageCount = MutableStateFlow(0)
+    val liveScanImageCount: StateFlow<Int> = _liveScanImageCount.asStateFlow()
     private var indexingJob: Job? = null
     private var indexingAlbumId: String? = null
 
@@ -132,12 +135,16 @@ class GalleryViewModel(
         indexingJob?.cancel()
         selectedAlbumId.value = album.id
         indexingAlbumId = album.id
+        _liveScanImageCount.value = 0
         _isIndexingAlbum.value = true
         indexingJob = viewModelScope.launch(Dispatchers.IO) {
             try {
                 mediaIndexRepository.reconcileAlbum(
                     albumId = album.id,
-                    folder = File(album.canonicalPath)
+                    folder = File(album.canonicalPath),
+                    onProgress = { count ->
+                        if (indexingAlbumId == album.id) _liveScanImageCount.value = count
+                    }
                 )
             } catch (exception: CancellationException) {
                 throw exception
@@ -161,6 +168,7 @@ class GalleryViewModel(
         indexingJob = null
         indexingAlbumId = null
         _isIndexingAlbum.value = false
+        _liveScanImageCount.value = 0
         selectedAlbumId.value = null
     }
 

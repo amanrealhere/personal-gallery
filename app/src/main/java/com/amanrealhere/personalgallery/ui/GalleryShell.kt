@@ -11,6 +11,9 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.width
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
@@ -50,6 +53,7 @@ fun GalleryShell(viewModel: GalleryViewModel) {
     val images = viewModel.albumImages
     val isIndexingAlbum by viewModel.isIndexingAlbum.collectAsStateWithLifecycle()
     val indexedImageCount by viewModel.albumImageCount.collectAsStateWithLifecycle()
+    val liveScanImageCount by viewModel.liveScanImageCount.collectAsStateWithLifecycle()
     val workInfos by viewModel.thumbnailWorkInfos.collectAsStateWithLifecycle(initialValue = emptyList())
 
     val selectedAlbum = remember(albums, selectedAlbumPath) {
@@ -120,7 +124,11 @@ fun GalleryShell(viewModel: GalleryViewModel) {
 
     // Album indexing runs before Paging is opened; do not rescan on resume
     // and inject new rows into an actively browsed grid.
-    val sidebarWidth = if (sidebarExpanded) 280.dp else 76.dp
+    val sidebarWidth by animateDpAsState(
+        targetValue = if (sidebarExpanded) 280.dp else 76.dp,
+        animationSpec = tween(durationMillis = 260, easing = FastOutSlowInEasing),
+        label = "sidebar width"
+    )
 
     BackHandler(
         enabled = destination == GalleryDestination.AddAlbum || selectedAlbumPath != null
@@ -178,6 +186,7 @@ fun GalleryShell(viewModel: GalleryViewModel) {
                                 album = selectedAlbum,
                                 images = images,
                                 imageCount = indexedImageCount,
+                                liveScanImageCount = liveScanImageCount,
                                 isIndexing = isIndexingAlbum,
                                 coverPath = selectedState?.coverThumbnailPath,
                                 progressMessage = progressMessage,

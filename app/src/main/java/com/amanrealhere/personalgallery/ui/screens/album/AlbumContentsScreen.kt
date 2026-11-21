@@ -57,6 +57,7 @@ fun AlbumContentsScreen(
     album: Album,
     images: Flow<PagingData<MediaItemEntity>>,
     imageCount: Int,
+    liveScanImageCount: Int,
     isIndexing: Boolean,
     coverPath: String?,
     progressMessage: String?,
@@ -116,8 +117,9 @@ fun AlbumContentsScreen(
         ConcatAdapter(headerAdapter, pagingAdapter)
     }
 
-    LaunchedEffect(imageCount, isIndexing, album.id) {
-        if (imageCount > 0 || !isIndexing) stableImageCount = imageCount
+    LaunchedEffect(imageCount, liveScanImageCount, isIndexing, album.id) {
+        val bestAvailableCount = maxOf(imageCount, liveScanImageCount)
+        if (bestAvailableCount > 0 || !isIndexing) stableImageCount = bestAvailableCount
     }
 
     LaunchedEffect(images, pagingAdapter) {

@@ -19,7 +19,11 @@ import java.util.UUID
  * rows are deleted only after a complete scan.
  */
 class MediaIndexRepository(private val mediaItemDao: MediaItemDao) {
-    suspend fun reconcileAlbum(albumId: String, folder: File): ScanResult {
+    suspend fun reconcileAlbum(
+        albumId: String,
+        folder: File,
+        onProgress: (Int) -> Unit = {}
+    ): ScanResult {
         val scanToken = UUID.randomUUID().toString()
         mediaItemDao.clearStaging(scanToken)
         if (!folder.isDirectory || !folder.canRead()) return ScanResult.Unavailable
@@ -65,6 +69,7 @@ class MediaIndexRepository(private val mediaItemDao: MediaItemDao) {
                             modifiedAtEpochMillis = child.lastModified()
                         )
                         indexed++
+                        if (indexed == 1 || indexed % PROGRESS_INTERVAL == 0) onProgress(indexed)
                         if (batch.size >= BATCH_SIZE) {
                             mediaItemDao.insertStaging(batch.toList())
                             batch.clear()
@@ -73,6 +78,7 @@ class MediaIndexRepository(private val mediaItemDao: MediaItemDao) {
                 }
             }
             if (batch.isNotEmpty()) mediaItemDao.insertStaging(batch.toList())
+            onProgress(indexed)
             mediaItemDao.finishStagedScan(albumId, scanToken, complete)
             finalized = true
             return ScanResult.Completed(indexed, complete)
@@ -90,6 +96,7 @@ class MediaIndexRepository(private val mediaItemDao: MediaItemDao) {
 
     companion object {
         private const val BATCH_SIZE = 256
+        private const val PROGRESS_INTERVAL = 64
         private val SUPPORTED_EXTENSIONS = setOf("jpg", "jpeg", "png", "webp")
     }
 }
