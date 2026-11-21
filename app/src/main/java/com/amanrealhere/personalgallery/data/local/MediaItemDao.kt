@@ -47,6 +47,12 @@ interface MediaItemDao {
     """)
     suspend fun applyStagedBatch(albumId: String, scanToken: String, ids: List<String>)
 
+    @Transaction
+    suspend fun stageAndApplyBatch(albumId: String, scanToken: String, items: List<MediaItemStagingEntity>) {
+        insertStaging(items)
+        applyStagedBatch(albumId, scanToken, items.map { it.id })
+    }
+
     @Query("""
         DELETE FROM media_items
         WHERE albumId = :albumId
