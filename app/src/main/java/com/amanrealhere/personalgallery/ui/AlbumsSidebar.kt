@@ -267,7 +267,7 @@ private fun CollapsedSidebarButton(
 ) {
     val shape = RoundedCornerShape(16.dp)
     Surface(
-        modifier = Modifier.size(56.dp).clip(shape).clickable(onClick = onClick).semantics { this.contentDescription = contentDescription },
+        modifier = Modifier.size(56.dp).clip(shape).clickable(onClick = onClick).semantics { this.contentDescription = listOf(contentDescription) },
         shape = shape,
         color = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainerLow,
         border = if (selected) BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant) else null
