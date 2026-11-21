@@ -75,6 +75,7 @@ fun AlbumContentsScreen(
     }
 
     var hasItems by remember(pagingAdapter) { mutableStateOf(pagingAdapter.itemCount > 0) }
+    var initialPagingAccessHintSent by remember(pagingAdapter) { mutableStateOf(false) }
     DisposableEffect(pagingAdapter) {
         val observer = object : RecyclerView.AdapterDataObserver() {
             private fun update() { hasItems = pagingAdapter.itemCount > 0 }
