@@ -54,19 +54,8 @@ class MediaIndexRepository(private val mediaItemDao: MediaItemDao) {
                 }
                 for (child in children) {
                     currentCoroutineContext().ensureActive()
-                    if (child.name == ".personal-gallery") continue
-                    val isImageCandidate = child.extension.lowercase() in SUPPORTED_EXTENSIONS
-                    if (!isImageCandidate) {
-                        // Skip full NIO attribute reads for files outside the supported image types.
-                        if (child.isDirectory) {
-                            if (!Files.isSymbolicLink(child.toPath())) pendingDirectories.add(child)
-                        } else if (!child.canRead()) {
-                            // An unreadable entry could be a directory; avoid deleting stale
-                            // catalogue rows if this scan cannot confidently traverse it.
-                            complete = false
-                        }
-                        continue
-                    }
+                    // Read each entry's attributes once. This avoids separate isSymlink,
+                    // isDirectory, isFile, canonicalPath, length and lastModified calls.
                     val attributes = try {
                         Files.readAttributes(child.toPath(), BasicFileAttributes::class.java)
                     } catch (_: Exception) {
@@ -74,8 +63,9 @@ class MediaIndexRepository(private val mediaItemDao: MediaItemDao) {
                         continue
                     }
                     if (attributes.isSymbolicLink) continue
-                    if (attributes.isDirectory) pendingDirectories.add(child)
-                    else if (attributes.isRegularFile) {
+                    if (attributes.isDirectory) {
+                        if (child.name != ".personal-gallery") pendingDirectories.add(child)
+                    } else if (attributes.isRegularFile && child.extension.lowercase() in SUPPORTED_EXTENSIONS) {
                         // The registered album root is canonical and symlinks are skipped,
                         // so the absolute child path is a stable identity without realpath().
                         val absolutePath = child.absolutePath
@@ -93,8 +83,7 @@ class MediaIndexRepository(private val mediaItemDao: MediaItemDao) {
                         if (indexed == 1 || indexed % PROGRESS_INTERVAL == 0) onProgress(indexed)
                         val batchLimit = if (indexed <= INITIAL_BATCH_SIZE) INITIAL_BATCH_SIZE else BATCH_SIZE
                         if (batch.size >= batchLimit) {
-                            mediaItemDao.insertStaging(batch)
-                            mediaItemDao.applyStagedBatch(albumId, scanToken, batch.map { it.id })
+                            mediaItemDao.stageAndApplyBatch(albumId, scanToken, batch)
                             batch.clear()
                         }
                     }
