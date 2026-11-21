@@ -413,17 +413,17 @@ private class CollapsedAlbumHeaderAdapter(
         progressMessage: String?,
         visible: Boolean
     ) {
-        val changed = this.albumName.value != albumName ||
-            this.imageCount.value != imageCount ||
-            this.isLoading.value != isLoading ||
-            this.progressMessage.value != progressMessage ||
-            this.visible.value != visible
+        val changed = this.albumName != albumName ||
+            this.imageCount != imageCount ||
+            this.isLoading != isLoading ||
+            this.progressMessage != progressMessage ||
+            this.visible != visible
         if (!changed) return
-        this.albumName.value = albumName
-        this.imageCount.value = imageCount
-        this.isLoading.value = isLoading
-        this.progressMessage.value = progressMessage
-        this.visible.value = visible
+        this.albumName = albumName
+        this.imageCount = imageCount
+        this.isLoading = isLoading
+        this.progressMessage = progressMessage
+        this.visible = visible
         notifyItemChanged(0)
     }
 
@@ -439,10 +439,10 @@ private class CollapsedAlbumHeaderAdapter(
             )
             setContent {
                 AlbumHeader(
-                    albumName = albumName.value,
-                    imageCount = imageCount.value,
-                    isLoading = isLoading.value,
-                    progressMessage = progressMessage.value,
+                    albumName = albumName,
+                    imageCount = imageCount,
+                    isLoading = isLoading,
+                    progressMessage = progressMessage,
                     collapsedStyle = true,
                     onRegenerate = onRegenerate
                 )
@@ -452,7 +452,7 @@ private class CollapsedAlbumHeaderAdapter(
     }
 
     override fun onBindViewHolder(holder: HeaderViewHolder, position: Int) {
-        holder.itemView.visibility = if (visible.value) View.VISIBLE else View.GONE
+        holder.itemView.visibility = if (visible) View.VISIBLE else View.GONE
     }
 
     class HeaderViewHolder(val composeView: ComposeView) : RecyclerView.ViewHolder(composeView)
