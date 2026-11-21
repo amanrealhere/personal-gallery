@@ -16,8 +16,8 @@ on:
         type: string
 
       release_tag:
-        description: 'Release tag (app-SHORTSHA)'
-        required: true
+        description: 'Optional release tag; defaults to app-SHORTSHA for this commit'
+        required: false
         type: string
 
       build_date:
@@ -36,6 +36,8 @@ permissions:
 jobs:
   validate:
     name: Validate release request
+    outputs:
+      release_tag: ${{ steps.metadata.outputs.release_tag }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
 
@@ -56,6 +58,7 @@ jobs:
           echo "Selected branch: main"
 
       - name: Validate release metadata
+        id: metadata
         shell: bash
         env:
           INPUT_RUN_NAME: ${{ inputs.run_name }}
@@ -81,19 +84,27 @@ jobs:
             false
           fi
 
-          if [[ ! "$INPUT_RELEASE_TAG" =~ ^app-([0-9a-f]{7})$ ]]; then
+          EXPECTED_TAG="app-${GITHUB_SHA:0:7}"
+          RELEASE_TAG="$INPUT_RELEASE_TAG"
+
+          if [[ -z "${RELEASE_TAG//[[:space:]]/}" ]]; then
+            RELEASE_TAG="$EXPECTED_TAG"
+            echo "No release tag supplied; using commit tag: $RELEASE_TAG"
+          fi
+
+          if [[ ! "$RELEASE_TAG" =~ ^app-([0-9a-f]{7})$ ]]; then
             echo "::error::release_tag must use app-SHORTSHA with seven lowercase hexadecimal characters."
             false
           fi
 
-          EXPECTED_TAG="app-${GITHUB_SHA:0:7}"
-
-          if [[ "$INPUT_RELEASE_TAG" != "$EXPECTED_TAG" ]]; then
+          if [[ "$RELEASE_TAG" != "$EXPECTED_TAG" ]]; then
             echo "::error::Release tag does not match the selected commit."
             echo "Expected: $EXPECTED_TAG"
-            echo "Received: $INPUT_RELEASE_TAG"
+            echo "Received: $RELEASE_TAG"
             false
           fi
+
+          echo "release_tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
 
           python3 - "$INPUT_BUILD_DATE" <<'PY'
           from datetime import date
@@ -188,7 +199,7 @@ jobs:
         shell: bash
         env:
           INPUT_BUILD_DATE: ${{ inputs.build_date }}
-          INPUT_RELEASE_TAG: ${{ inputs.release_tag }}
+          RELEASE_TAG: ${{ needs.validate.outputs.release_tag }}
         run: |
           set -euo pipefail
 
@@ -277,7 +288,7 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          tag_name: ${{ inputs.release_tag }}
+          tag_name: ${{ needs.validate.outputs.release_tag }}
           target_commitish: ${{ github.sha }}
           name: ${{ inputs.release_title }}
           body: ${{ inputs.release_notes }}
