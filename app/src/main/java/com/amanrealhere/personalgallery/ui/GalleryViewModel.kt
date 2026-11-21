@@ -156,7 +156,7 @@ class GalleryViewModel(
         }
     }
 
-        fun clearAlbumImages() {
+    fun clearAlbumImages() {
         indexingJob?.cancel()
         indexingJob = null
         indexingAlbumId = null
