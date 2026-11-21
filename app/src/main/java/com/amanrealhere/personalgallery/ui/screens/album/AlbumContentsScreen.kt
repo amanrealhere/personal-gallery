@@ -1,15 +1,7 @@
 package com.amanrealhere.personalgallery.ui.screens.album
 
 import android.view.ScaleGestureDetector
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.Button
+import android.view.View
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,46 +13,40 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material3.Surface
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
-import android.widget.LinearLayout
-import android.widget.TextView
-import android.widget.Button
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.platform.ComposeView
 import androidx.recyclerview.widget.ConcatAdapter
-import androidx.paging.CombinedLoadStates
-import androidx.paging.PagingData
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import androidx.paging.PagingData
 import com.amanrealhere.personalgallery.data.local.MediaItemEntity
 import com.amanrealhere.personalgallery.domain.model.Album
 import com.amanrealhere.personalgallery.ui.components.MediaGridPagingAdapter
-import com.amanrealhere.personalgallery.ui.components.GridDiagnosticsRecorder
 import com.amanrealhere.personalgallery.ui.components.ThumbnailPreview
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collectLatest
@@ -79,35 +65,37 @@ fun AlbumContentsScreen(
     onRegenerate: () -> Unit
 ) {
     val context = LocalContext.current
-    val pagingAdapter = remember { MediaGridPagingAdapter() }
-    val diagnostics = remember(album.id) { GridDiagnosticsRecorder(context) }
-    var showDiagnostics by remember { mutableStateOf(false) }
-    val exportLogLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { uri ->
-        if (uri != null) runCatching { context.contentResolver.openOutputStream(uri)?.use { stream -> stream.write(diagnostics.readAll().toByteArray(Charsets.UTF_8)) } }
-    }
-    DisposableEffect(diagnostics) {
-        diagnostics.beginSession(album.name, album.id)
-        onDispose { diagnostics.log("ALBUM_SCREEN_DISPOSED"); diagnostics.stop() }
-    }
-    var loadState by remember(pagingAdapter) { mutableStateOf<CombinedLoadStates?>(null) }
-    LaunchedEffect(pagingAdapter, diagnostics) {
-        pagingAdapter.loadStateFlow.collect { states ->
-            loadState = states
-            diagnostics.log("LOAD_STATE refresh=${states.refresh} prepend=${states.prepend} append=${states.append}")
-        }
-    }
-    LaunchedEffect(pagingAdapter, diagnostics) {
-        pagingAdapter.onPagesUpdatedFlow.collect {
-            val itemsNow = pagingAdapter.snapshot().items
-            diagnostics.log("PAGING_PAGES_UPDATED loaded=${itemsNow.size} adapterCount=${pagingAdapter.itemCount}")
-            diagnostics.snapshot("pages-updated", itemsNow)
-        }
+
+    // Use a fresh PagingAdapter for each album to avoid carrying recycled cells
+    // and adapter state across different PagingData generations.
+    val pagingAdapter = remember(album.id) { MediaGridPagingAdapter() }
+    var loadState by remember(pagingAdapter) { mutableStateOf<androidx.paging.CombinedLoadStates?>(null) }
+    LaunchedEffect(pagingAdapter) {
+        pagingAdapter.loadStateFlow.collect { loadState = it }
     }
 
     var hasItems by remember(pagingAdapter) { mutableStateOf(pagingAdapter.itemCount > 0) }
+    DisposableEffect(pagingAdapter) {
+        val observer = object : RecyclerView.AdapterDataObserver() {
+            private fun update() { hasItems = pagingAdapter.itemCount > 0 }
+            override fun onChanged() = update()
+            override fun onItemRangeInserted(positionStart: Int, itemCount: Int) = update()
+            override fun onItemRangeRemoved(positionStart: Int, itemCount: Int) = update()
+            override fun onItemRangeChanged(positionStart: Int, itemCount: Int) = update()
+            override fun onItemRangeChanged(positionStart: Int, itemCount: Int, payload: Any?) = update()
+        }
+        pagingAdapter.registerAdapterDataObserver(observer)
+        hasItems = pagingAdapter.itemCount > 0
+        onDispose { pagingAdapter.unregisterAdapterDataObserver(observer) }
+    }
+
     var minimumCellSizeDp by remember { mutableFloatStateOf(148f) }
     var recyclerView by remember { mutableStateOf<RecyclerView?>(null) }
     var stableImageCount by remember(album.id) { mutableStateOf(imageCount) }
+
+    // Header remains adapter position 0 at all times. When not needed it is GONE,
+    // rather than inserted/removed, so grid positions never shift during sidebar
+    // transitions and header visibility is not part of the span lookup.
     val headerAdapter = remember(album.id) {
         CollapsedAlbumHeaderAdapter(
             albumName = album.name,
@@ -115,7 +103,6 @@ fun AlbumContentsScreen(
             isLoading = isLoading,
             progressMessage = progressMessage,
             visible = !sidebarExpanded,
-            onDiagnostics = { showDiagnostics = true },
             onRegenerate = onRegenerate
         )
     }
@@ -128,38 +115,24 @@ fun AlbumContentsScreen(
             visible = !sidebarExpanded
         )
     }
-    val concatAdapter = remember(headerAdapter, pagingAdapter) { ConcatAdapter(headerAdapter, pagingAdapter) }
+    val concatAdapter = remember(headerAdapter, pagingAdapter) {
+        ConcatAdapter(headerAdapter, pagingAdapter)
+    }
+
     LaunchedEffect(imageCount, isIndexing, album.id) {
         if (imageCount > 0 || !isIndexing) stableImageCount = imageCount
     }
 
     LaunchedEffect(images, pagingAdapter) {
-        images.collectLatest { pagingData ->
-            diagnostics.log("PAGING_GENERATION_RECEIVED")
-            pagingAdapter.submitData(pagingData)
-        }
+        images.collectLatest { pagingData -> pagingAdapter.submitData(pagingData) }
     }
 
-    DisposableEffect(pagingAdapter) {
-        val observer = object : RecyclerView.AdapterDataObserver() {
-            private fun update(event: String, start: Int = -1, count: Int = -1) {
-                hasItems = pagingAdapter.itemCount > 0
-                diagnostics.adapterEvent(event, start, count, pagingAdapter.snapshot().items)
-            }
-            override fun onChanged() = update("changed")
-            override fun onItemRangeInserted(positionStart: Int, itemCount: Int) = update("inserted", positionStart, itemCount)
-            override fun onItemRangeRemoved(positionStart: Int, itemCount: Int) = update("removed", positionStart, itemCount)
-            override fun onItemRangeChanged(positionStart: Int, itemCount: Int) = update("changed-range", positionStart, itemCount)
-            override fun onItemRangeChanged(positionStart: Int, itemCount: Int, payload: Any?) = update("changed-payload", positionStart, itemCount)
-            override fun onItemRangeMoved(fromPosition: Int, toPosition: Int, itemCount: Int) = update("moved-from-$fromPosition-to-$toPosition", fromPosition, itemCount)
+    LaunchedEffect(album.id, sidebarExpanded) {
+        recyclerView?.post {
+            recyclerView?.stopScroll()
+            val topPosition = if (sidebarExpanded) 1 else 0
+            (recyclerView?.layoutManager as? GridLayoutManager)?.scrollToPosition(topPosition)
         }
-        pagingAdapter.registerAdapterDataObserver(observer)
-        hasItems = pagingAdapter.itemCount > 0
-        onDispose { pagingAdapter.unregisterAdapterDataObserver(observer) }
-    }
-
-    LaunchedEffect(album.id) {
-        recyclerView?.post { recyclerView?.scrollToPosition(0) }
     }
 
     val density = LocalDensity.current
@@ -183,9 +156,11 @@ fun AlbumContentsScreen(
                             (18f * viewDensity).toInt(),
                             (18f * viewDensity).toInt()
                         )
-                        setHasFixedSize(true)
+                        // Adapter content affects header height and grid cell sizing.
+                        setHasFixedSize(false)
                         setItemViewCacheSize(4)
                         itemAnimator = null
+
                         val gridLayoutManager = GridLayoutManager(
                             viewContext,
                             calculateSpanCount(width, paddingLeft, paddingRight, viewDensity, minimumCellSizeDp)
@@ -194,7 +169,7 @@ fun AlbumContentsScreen(
                         }
                         gridLayoutManager.spanSizeLookup = object : GridLayoutManager.SpanSizeLookup() {
                             override fun getSpanSize(position: Int): Int =
-                                if (position < headerAdapter.itemCount) gridLayoutManager.spanCount else 1
+                                if (position == 0) gridLayoutManager.spanCount else 1
                         }
                         layoutManager = gridLayoutManager
                         adapter = concatAdapter
@@ -222,36 +197,16 @@ fun AlbumContentsScreen(
                         scaleDetector.onTouchEvent(event)
                         false
                     }
-                    rv.addOnScrollListener(object : RecyclerView.OnScrollListener() {
-                        override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
-                            val lm = recyclerView.layoutManager as? GridLayoutManager ?: return
-                            val first = lm.findFirstVisibleItemPosition(); val last = lm.findLastVisibleItemPosition()
-                            if (first == RecyclerView.NO_POSITION || last == RecyclerView.NO_POSITION) return
-                            val child = lm.findViewByPosition(first)
-                            val offset = (child?.top ?: recyclerView.paddingTop) - recyclerView.paddingTop
-                            val headerCount = headerAdapter.itemCount
-                            val gridFirst = (first - headerCount).coerceAtLeast(0)
-                            val gridLast = (last - headerCount).coerceAtLeast(0)
-                            val keys = (first..last).mapNotNull { position ->
-                                (position - headerCount).takeIf { it >= 0 }?.let { pagingAdapter.peek(it)?.id }
-                            }
-                            diagnostics.scroll(gridFirst, gridLast, offset, keys)
-                        }
-                    })
-                    var previousWidth = 0
+
                     rv.addOnLayoutChangeListener { view, _, _, _, _, _, _, _, _ ->
-                        val changedRv = view as RecyclerView
-                        if (changedRv.width != previousWidth) {
-                            val anchor = captureGridScrollAnchor(changedRv)
-                            updateGridSpanCount(changedRv, viewDensity, minimumCellSizeDp, preserveAnchor = false)
-                            restoreGridScrollAnchor(changedRv, anchor)
-                            previousWidth = changedRv.width
-                        } else {
-                            updateGridSpanCount(changedRv, viewDensity, minimumCellSizeDp)
-                        }
+                        updateGridSpanCount(
+                            view as RecyclerView,
+                            viewDensity,
+                            minimumCellSizeDp,
+                            preserveAnchor = true
+                        )
                     }
                     recyclerView = rv
-                    diagnostics.log("RECYCLERVIEW_CREATED width=${rv.width} height=${rv.height} paddingTop=${rv.paddingTop}")
                     rv
                 },
                 update = { rv ->
@@ -303,37 +258,12 @@ fun AlbumContentsScreen(
                         imageCount = stableImageCount,
                         isLoading = isLoading,
                         progressMessage = progressMessage,
-                        onDiagnostics = { showDiagnostics = true },
+                        collapsedStyle = false,
                         onRegenerate = onRegenerate
                     )
                 }
             }
         }
-    }
-
-    if (showDiagnostics) {
-        AlertDialog(
-            onDismissRequest = { showDiagnostics = false },
-            title = { Text("Grid diagnostics") },
-            text = {
-                Column(Modifier.fillMaxWidth()) {
-                    Text("Dataset changes, newly observed images, Paging load states, adapter events, and scroll positions are recorded.")
-                    Spacer(Modifier.height(8.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(onClick = { exportLogLauncher.launch("grid-diagnostics-${album.name.replace(Regex("[^A-Za-z0-9._-]"), "_")}.txt") }) { Text("Export log") }
-                        OutlinedButton(onClick = { if (diagnostics.isRecording) diagnostics.stop() else diagnostics.start() }) {
-                            Text(if (diagnostics.isRecording) "Stop recording" else "Resume recording")
-                        }
-                    }
-                    Spacer(Modifier.height(8.dp))
-                    Text("Latest ${diagnostics.visibleLines.size} lines; full log is saved privately in app storage.")
-                    Column(Modifier.fillMaxWidth().height(420.dp).verticalScroll(rememberScrollState())) {
-                        diagnostics.visibleLines.forEach { line -> Text(line, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace) }
-                    }
-                }
-            },
-            confirmButton = { TextButton(onClick = { showDiagnostics = false }) { Text("Close") } }
-        )
     }
 }
 
@@ -396,35 +326,43 @@ private fun AlbumHeader(
     imageCount: Int,
     isLoading: Boolean,
     progressMessage: String?,
-    onDiagnostics: () -> Unit,
+    collapsedStyle: Boolean,
     onRegenerate: () -> Unit
 ) {
     Surface(modifier = Modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.surfaceContainerLow) {
         Column {
             Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 12.dp),
+                modifier = Modifier.fillMaxWidth().padding(
+                    horizontal = if (collapsedStyle) 24.dp else 18.dp,
+                    vertical = if (collapsedStyle) 22.dp else 12.dp
+                ),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                horizontalArrangement = Arrangement.spacedBy(if (collapsedStyle) 16.dp else 12.dp)
             ) {
-                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(if (collapsedStyle) 8.dp else 5.dp)
+                ) {
                     Text(
                         text = albumName,
-                        style = MaterialTheme.typography.titleLarge,
+                        style = if (collapsedStyle) MaterialTheme.typography.headlineSmall
+                            else MaterialTheme.typography.titleLarge,
                         color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1,
+                        maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
                     Surface(shape = RoundedCornerShape(50.dp), color = MaterialTheme.colorScheme.secondaryContainer) {
                         Text(
                             text = "$imageCount ${if (imageCount == 1) "image" else "images"}",
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                            style = MaterialTheme.typography.labelMedium,
+                            modifier = Modifier.padding(
+                                horizontal = if (collapsedStyle) 14.dp else 10.dp,
+                                vertical = if (collapsedStyle) 7.dp else 4.dp
+                            ),
+                            style = if (collapsedStyle) MaterialTheme.typography.labelLarge
+                                else MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSecondaryContainer
                         )
                     }
-                }
-                IconButton(onClick = onDiagnostics) {
-                    Icon(Icons.Filled.Info, contentDescription = "Grid diagnostics", tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 FilledTonalIconButton(onClick = onRegenerate, enabled = !isLoading) {
                     Icon(Icons.Filled.Refresh, contentDescription = "Regenerate album cover")
@@ -432,16 +370,20 @@ private fun AlbumHeader(
             }
             if (progressMessage != null) {
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, bottom = 12.dp),
+                    modifier = Modifier.fillMaxWidth().padding(
+                        start = if (collapsedStyle) 24.dp else 20.dp,
+                        end = if (collapsedStyle) 24.dp else 20.dp,
+                        bottom = if (collapsedStyle) 16.dp else 12.dp
+                    ),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
                     Text(
                         progressMessage,
-                        style = MaterialTheme.typography.bodySmall,
+                        style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
+                        maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
                 }
@@ -456,14 +398,13 @@ private class CollapsedAlbumHeaderAdapter(
     isLoading: Boolean,
     progressMessage: String?,
     visible: Boolean,
-    private val onDiagnostics: () -> Unit,
     private val onRegenerate: () -> Unit
-) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
-    private var albumName = albumName
-    private var imageCount = imageCount
-    private var isLoading = isLoading
-    private var progressMessage = progressMessage
-    private var visible = visible
+) : RecyclerView.Adapter<CollapsedAlbumHeaderAdapter.HeaderViewHolder>() {
+    private var albumName by mutableStateOf(albumName)
+    private var imageCount by mutableStateOf(imageCount)
+    private var isLoading by mutableStateOf(isLoading)
+    private var progressMessage by mutableStateOf(progressMessage)
+    private var visible by mutableStateOf(visible)
 
     fun update(
         albumName: String,
@@ -472,74 +413,47 @@ private class CollapsedAlbumHeaderAdapter(
         progressMessage: String?,
         visible: Boolean
     ) {
-        val wasVisible = this.visible
-        val changed = this.albumName != albumName || this.imageCount != imageCount ||
-            this.isLoading != isLoading || this.progressMessage != progressMessage
-        this.albumName = albumName
-        this.imageCount = imageCount
-        this.isLoading = isLoading
-        this.progressMessage = progressMessage
-        this.visible = visible
-        when {
-            !wasVisible && visible -> notifyItemInserted(0)
-            wasVisible && !visible -> notifyItemRemoved(0)
-            visible && changed -> notifyItemChanged(0)
-        }
+        val changed = this.albumName.value != albumName ||
+            this.imageCount.value != imageCount ||
+            this.isLoading.value != isLoading ||
+            this.progressMessage.value != progressMessage ||
+            this.visible.value != visible
+        if (!changed) return
+        this.albumName.value = albumName
+        this.imageCount.value = imageCount
+        this.isLoading.value = isLoading
+        this.progressMessage.value = progressMessage
+        this.visible.value = visible
+        notifyItemChanged(0)
     }
 
-    override fun getItemCount() = if (visible) 1 else 0
+    // A permanent full-span header stabilizes all photo adapter positions across
+    // sidebar expand/collapse. The header itself is GONE when the overlay is used.
+    override fun getItemCount() = 1
 
-    override fun onCreateViewHolder(parent: android.view.ViewGroup, viewType: Int): RecyclerView.ViewHolder {
-        val density = parent.context.resources.displayMetrics.density
-        fun dp(value: Int) = (value * density).toInt()
-        val root = LinearLayout(parent.context).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(24), dp(16), dp(24), dp(16))
+    override fun onCreateViewHolder(parent: android.view.ViewGroup, viewType: Int): HeaderViewHolder {
+        val composeView = ComposeView(parent.context).apply {
             layoutParams = RecyclerView.LayoutParams(
                 RecyclerView.LayoutParams.MATCH_PARENT,
                 RecyclerView.LayoutParams.WRAP_CONTENT
             )
+            setContent {
+                AlbumHeader(
+                    albumName = albumName.value,
+                    imageCount = imageCount.value,
+                    isLoading = isLoading.value,
+                    progressMessage = progressMessage.value,
+                    collapsedStyle = true,
+                    onRegenerate = onRegenerate
+                )
+            }
         }
-        val title = TextView(parent.context).apply {
-            textSize = 22f
-            maxLines = 1
-            setTextColor(0xFF202124.toInt())
-        }
-        val count = TextView(parent.context).apply {
-            textSize = 13f
-            setPadding(dp(12), dp(6), dp(12), dp(6))
-            setTextColor(0xFF334155.toInt())
-            setBackgroundColor(0xFFE2E8F0.toInt())
-        }
-        val row = LinearLayout(parent.context).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = android.view.Gravity.CENTER_VERTICAL
-        }
-        val diag = Button(parent.context).apply { text = "Diagnostics"; setOnClickListener { onDiagnostics() } }
-        val regen = Button(parent.context).apply { text = "Refresh"; setOnClickListener { onRegenerate() } }
-        row.addView(diag)
-        row.addView(regen)
-        root.addView(title)
-        root.addView(count)
-        root.addView(row)
-        return object : RecyclerView.ViewHolder(root) {
-            val titleView = title
-            val countView = count
-            val refreshButton = regen
-        }
+        return HeaderViewHolder(composeView)
     }
 
-    override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
-        val h = holder as? RecyclerView.ViewHolder ?: return
-        val root = h.itemView as LinearLayout
-        val titleView = root.getChildAt(0) as TextView
-        val countView = root.getChildAt(1) as TextView
-        val actionRow = root.getChildAt(2) as LinearLayout
-        titleView.text = albumName
-        countView.text = "$imageCount ${if (imageCount == 1) "image" else "images"}"
-        (actionRow.getChildAt(1) as Button).isEnabled = !isLoading
-        if (progressMessage != null) {
-            countView.text = countView.text.toString() + " · " + progressMessage
-        }
+    override fun onBindViewHolder(holder: HeaderViewHolder, position: Int) {
+        holder.itemView.visibility = if (visible.value) View.VISIBLE else View.GONE
     }
+
+    class HeaderViewHolder(val composeView: ComposeView) : RecyclerView.ViewHolder(composeView)
 }
