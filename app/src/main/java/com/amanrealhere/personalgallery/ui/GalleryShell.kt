@@ -138,6 +138,7 @@ fun GalleryShell(viewModel: GalleryViewModel) {
                 AlbumsSidebar(
                     sidebarExpanded = sidebarExpanded,
                     albums = albums,
+                    thumbnailStates = thumbnailStates,
                     selectedAlbumPath = selectedAlbumPath,
                     isAlbumsOverviewSelected = destination == GalleryDestination.Albums && selectedAlbumPath == null,
                     isAddAlbumSelected = destination == GalleryDestination.AddAlbum,
