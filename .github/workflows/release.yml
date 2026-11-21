@@ -306,7 +306,7 @@ jobs:
           {
             echo "## Release published"
             echo ""
-            echo "- Tag: \`${{ inputs.release_tag }}\`"
+            echo "- Tag: \`${{ needs.validate.outputs.release_tag }}\`"
             echo "- Commit: \`${GITHUB_SHA}\`"
             echo "- APK: \`${APK_NAME}\`"
             echo "- SHA-256 checksum included."
