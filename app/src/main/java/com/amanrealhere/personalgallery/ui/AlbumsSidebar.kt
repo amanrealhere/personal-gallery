@@ -1,5 +1,8 @@
 package com.amanrealhere.personalgallery.ui
 
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
@@ -62,30 +65,36 @@ fun AlbumsSidebar(
         modifier = Modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.surfaceContainerLow
     ) {
-        if (sidebarExpanded) {
-            ExpandedAlbumsSidebar(
-                albums = albums,
-                thumbnailStatesByAlbumId = thumbnailStatesByAlbumId,
-                selectedAlbumPath = selectedAlbumPath,
-                isAlbumsOverviewSelected = isAlbumsOverviewSelected,
-                isAddAlbumSelected = isAddAlbumSelected,
-                onToggleSidebar = onToggleSidebar,
-                onAlbumsClick = onAlbumsClick,
-                onAddAlbumClick = onAddAlbumClick,
-                onAlbumClick = onAlbumClick
-            )
-        } else {
-            CollapsedAlbumsSidebar(
-                albums = albums,
-                thumbnailStatesByAlbumId = thumbnailStatesByAlbumId,
-                selectedAlbumPath = selectedAlbumPath,
-                isAlbumsOverviewSelected = isAlbumsOverviewSelected,
-                isAddAlbumSelected = isAddAlbumSelected,
-                onToggleSidebar = onToggleSidebar,
-                onAlbumsClick = onAlbumsClick,
-                onAddAlbumClick = onAddAlbumClick,
-                onAlbumClick = onAlbumClick
-            )
+        Crossfade(
+            targetState = sidebarExpanded,
+            animationSpec = tween(durationMillis = 120, easing = FastOutSlowInEasing),
+            label = "sidebar content"
+        ) { expanded ->
+            if (expanded) {
+                ExpandedAlbumsSidebar(
+                    albums = albums,
+                    thumbnailStatesByAlbumId = thumbnailStatesByAlbumId,
+                    selectedAlbumPath = selectedAlbumPath,
+                    isAlbumsOverviewSelected = isAlbumsOverviewSelected,
+                    isAddAlbumSelected = isAddAlbumSelected,
+                    onToggleSidebar = onToggleSidebar,
+                    onAlbumsClick = onAlbumsClick,
+                    onAddAlbumClick = onAddAlbumClick,
+                    onAlbumClick = onAlbumClick
+                )
+            } else {
+                CollapsedAlbumsSidebar(
+                    albums = albums,
+                    thumbnailStatesByAlbumId = thumbnailStatesByAlbumId,
+                    selectedAlbumPath = selectedAlbumPath,
+                    isAlbumsOverviewSelected = isAlbumsOverviewSelected,
+                    isAddAlbumSelected = isAddAlbumSelected,
+                    onToggleSidebar = onToggleSidebar,
+                    onAlbumsClick = onAlbumsClick,
+                    onAddAlbumClick = onAddAlbumClick,
+                    onAlbumClick = onAlbumClick
+                )
+            }
         }
     }
 }
