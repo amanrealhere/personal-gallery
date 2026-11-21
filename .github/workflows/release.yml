@@ -16,7 +16,7 @@ on:
         type: string
 
       release_tag:
-        description: 'Optional release tag; defaults to app-SHORTSHA for this commit'
+        description: 'Optional release tag; defaults to app-SHORTSHA. A descriptive suffix may be added after the commit SHA'
         required: false
         type: string
 
@@ -92,12 +92,12 @@ jobs:
             echo "No release tag supplied; using commit tag: $RELEASE_TAG"
           fi
 
-          if [[ ! "$RELEASE_TAG" =~ ^app-([0-9a-f]{7})$ ]]; then
-            echo "::error::release_tag must use app-SHORTSHA with seven lowercase hexadecimal characters."
+          if [[ ! "$RELEASE_TAG" =~ ^app-([0-9a-f]{7})(-[a-z0-9]+(-[a-z0-9]+)*)?$ ]]; then
+            echo "::error::release_tag must use app-SHORTSHA, optionally followed by a lowercase descriptive suffix."
             false
           fi
 
-          if [[ "$RELEASE_TAG" != "$EXPECTED_TAG" ]]; then
+          if [[ "$RELEASE_TAG" != "$EXPECTED_TAG" && "$RELEASE_TAG" != "$EXPECTED_TAG-"* ]]; then
             echo "::error::Release tag does not match the selected commit."
             echo "Expected: $EXPECTED_TAG"
             echo "Received: $RELEASE_TAG"
