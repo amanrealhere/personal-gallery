@@ -126,11 +126,11 @@ class GalleryViewModel(
         if (selectedAlbumId.value == album.id) return
         if (indexingAlbumId == album.id && indexingJob?.isActive == true) return
 
-        // Keep the live Paging dataset unchanged while filesystem reconciliation runs.
-        // Publish this album to Paging only after the scan has finished, so the
-        // first displayed generation already reflects the completed catalogue.
+        // Open Paging immediately from the existing catalogue so the album appears
+        // without waiting for a filesystem reconciliation scan to finish.
+        // Reconciliation still runs in the background and updates the catalogue.
         indexingJob?.cancel()
-        selectedAlbumId.value = null
+        selectedAlbumId.value = album.id
         indexingAlbumId = album.id
         _isIndexingAlbum.value = true
         indexingJob = viewModelScope.launch(Dispatchers.IO) {
@@ -145,7 +145,6 @@ class GalleryViewModel(
                 // If scanning fails, still show the last successfully indexed catalogue.
             } finally {
                 if (indexingAlbumId == album.id && indexingJob?.isActive == true) {
-                    selectedAlbumId.value = album.id
                     _isIndexingAlbum.value = false
                     indexingAlbumId = null
                 }
@@ -157,7 +156,7 @@ class GalleryViewModel(
         }
     }
 
-    fun clearAlbumImages() {
+        fun clearAlbumImages() {
         indexingJob?.cancel()
         indexingJob = null
         indexingAlbumId = null
