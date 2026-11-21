@@ -2,7 +2,6 @@ package com.amanrealhere.personalgallery.ui.screens.album
 
 import android.view.ScaleGestureDetector
 import android.view.View
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -11,14 +10,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.foundation.border
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -40,9 +32,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -115,9 +104,9 @@ fun AlbumContentsScreen(
         else -> "${imageCount} ${if (imageCount == 1) "image" else "images"}"
     }
 
-    // Header remains adapter position 0 at all times. When not needed it is GONE,
-    // rather than inserted/removed, so grid positions never shift during sidebar
-    // transitions and header visibility is not part of the span lookup.
+    // Header remains adapter position 0 at all times. It is GONE in expanded mode,
+    // keeping photo adapter positions stable while the expanded header is shown
+    // above the grid.
     val headerAdapter = remember(album.id) {
         CollapsedAlbumHeaderAdapter(
             albumName = album.name,
@@ -153,162 +142,121 @@ fun AlbumContentsScreen(
         }
     }
 
-    val density = LocalDensity.current
-    val overlayBottomGapPx = with(density) { 10.dp.roundToPx() }
-    var topOverlayHeightPx by remember { mutableStateOf(0) }
-    LaunchedEffect(sidebarExpanded) {
-        if (!sidebarExpanded) topOverlayHeightPx = 0
-    }
 
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-        Box(Modifier.fillMaxSize().clipToBounds()) {
-            AndroidView(
-                modifier = Modifier.fillMaxSize(),
-                factory = { viewContext ->
-                    val viewDensity = viewContext.resources.displayMetrics.density
-                    val rv = RecyclerView(viewContext).apply {
-                        clipToPadding = false
-                        setPadding(
-                            (18f * viewDensity).toInt(),
-                            if (sidebarExpanded) topOverlayHeightPx + overlayBottomGapPx else 0,
-                            (18f * viewDensity).toInt(),
-                            (18f * viewDensity).toInt()
-                        )
-                        // Adapter content affects header height and grid cell sizing.
-                        setHasFixedSize(true)
-                        setItemViewCacheSize(4)
-                        itemAnimator = null
+        Column(Modifier.fillMaxSize()) {
+            if (sidebarExpanded) {
+                AlbumHeader(
+                    albumName = album.name,
+                    countLabel = headerCountLabel,
+                    isLoading = isLoading,
+                    progressMessage = progressMessage,
+                    collapsedStyle = false,
+                    onRegenerate = onRegenerate
+                )
+            }
 
-                        val gridLayoutManager = GridLayoutManager(
+            Box(
+                modifier = if (sidebarExpanded) Modifier.weight(1f).fillMaxWidth() else Modifier.fillMaxSize()
+            ) {
+                AndroidView(
+                    modifier = Modifier.fillMaxSize(),
+                    factory = { viewContext ->
+                        val viewDensity = viewContext.resources.displayMetrics.density
+                        val rv = RecyclerView(viewContext).apply {
+                            clipToPadding = false
+                            setPadding(
+                                (18f * viewDensity).toInt(),
+                                0,
+                                (18f * viewDensity).toInt(),
+                                (18f * viewDensity).toInt()
+                            )
+                            setHasFixedSize(true)
+                            setItemViewCacheSize(4)
+                            itemAnimator = null
+
+                            val gridLayoutManager = GridLayoutManager(
+                                viewContext,
+                                calculateSpanCount(width, paddingLeft, paddingRight, viewDensity, minimumCellSizeDp)
+                            ).apply {
+                                isItemPrefetchEnabled = true
+                            }
+                            gridLayoutManager.spanSizeLookup = object : GridLayoutManager.SpanSizeLookup() {
+                                override fun getSpanSize(position: Int): Int =
+                                    if (position == 0) gridLayoutManager.spanCount else 1
+                            }
+                            layoutManager = gridLayoutManager
+                            adapter = concatAdapter
+                        }
+
+                        val scaleDetector = ScaleGestureDetector(
                             viewContext,
-                            calculateSpanCount(width, paddingLeft, paddingRight, viewDensity, minimumCellSizeDp)
-                        ).apply {
-                            isItemPrefetchEnabled = true
-                        }
-                        gridLayoutManager.spanSizeLookup = object : GridLayoutManager.SpanSizeLookup() {
-                            override fun getSpanSize(position: Int): Int =
-                                if (position == 0) gridLayoutManager.spanCount else 1
-                        }
-                        layoutManager = gridLayoutManager
-                        adapter = concatAdapter
-                    }
-
-                    val scaleDetector = ScaleGestureDetector(
-                        viewContext,
-                        object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
-                            private var accumulatedScale = 1f
-                            override fun onScale(detector: ScaleGestureDetector): Boolean {
-                                accumulatedScale *= detector.scaleFactor
-                                if (accumulatedScale >= 1.12f || accumulatedScale <= 0.89f) {
-                                    minimumCellSizeDp = (minimumCellSizeDp * accumulatedScale)
-                                        .coerceIn(92f, 240f)
+                            object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
+                                private var accumulatedScale = 1f
+                                override fun onScale(detector: ScaleGestureDetector): Boolean {
+                                    accumulatedScale *= detector.scaleFactor
+                                    if (accumulatedScale >= 1.12f || accumulatedScale <= 0.89f) {
+                                        minimumCellSizeDp = (minimumCellSizeDp * accumulatedScale)
+                                            .coerceIn(92f, 240f)
+                                        accumulatedScale = 1f
+                                    }
+                                    return true
+                                }
+                                override fun onScaleEnd(detector: ScaleGestureDetector) {
                                     accumulatedScale = 1f
                                 }
-                                return true
                             }
-                            override fun onScaleEnd(detector: ScaleGestureDetector) {
-                                accumulatedScale = 1f
-                            }
+                        )
+                        rv.setOnTouchListener { _, event ->
+                            scaleDetector.onTouchEvent(event)
+                            false
                         }
-                    )
-                    rv.setOnTouchListener { _, event ->
-                        scaleDetector.onTouchEvent(event)
-                        false
-                    }
 
-                    rv.addOnLayoutChangeListener { view, _, _, _, _, _, _, _, _ ->
-                        updateGridSpanCount(
-                            view as RecyclerView,
-                            viewDensity,
-                            minimumCellSizeDp,
-                            preserveAnchor = true
-                        )
+                        rv.addOnLayoutChangeListener { view, _, _, _, _, _, _, _, _ ->
+                            updateGridSpanCount(
+                                view as RecyclerView,
+                                viewDensity,
+                                minimumCellSizeDp,
+                                preserveAnchor = true
+                            )
+                        }
+                        recyclerView = rv
+                        rv.post {
+                            if (pagingAdapter.itemCount > 0) pagingAdapter.requestLoad(0)
+                            rv.requestLayout()
+                        }
+                        rv
+                    },
+                    update = { rv ->
+                        if (rv.adapter !== concatAdapter) rv.adapter = concatAdapter
+                        updateGridSpanCount(rv, rv.resources.displayMetrics.density, minimumCellSizeDp)
+                    },
+                    onRelease = { rv ->
+                        rv.adapter = null
+                        if (recyclerView === rv) recyclerView = null
                     }
-                    recyclerView = rv
-                    // Explicitly send an initial access hint after attachment.
-                    rv.post {
-                        if (pagingAdapter.itemCount > 0) pagingAdapter.requestLoad(0)
-                        rv.requestLayout()
-                    }
-                    rv
-                },
-                update = { rv ->
-                    if (rv.adapter !== concatAdapter) rv.adapter = concatAdapter
-                    val topPadding = if (sidebarExpanded) topOverlayHeightPx + overlayBottomGapPx else 0
-                    val paddingChanged = rv.paddingTop != topPadding
-                    val anchor = if (paddingChanged) captureGridScrollAnchor(rv) else null
-                    if (paddingChanged) {
-                        rv.setPadding(rv.paddingLeft, topPadding, rv.paddingRight, rv.paddingBottom)
-                    }
-                    updateGridSpanCount(rv, rv.resources.displayMetrics.density, minimumCellSizeDp)
-                    if (paddingChanged) restoreGridScrollAnchor(rv, anchor)
-                },
-                onRelease = { rv ->
-                    rv.adapter = null
-                    if (recyclerView === rv) recyclerView = null
-                }
-            )
+                )
 
-            if (!hasItems && (isIndexing || loadState?.refresh is androidx.paging.LoadState.Loading)) {
-                AlbumGridSkeleton()
-            } else if (!hasItems && loadState?.refresh !is androidx.paging.LoadState.Loading) {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        ThumbnailPreview(
-                            path = coverPath,
-                            modifier = Modifier.fillMaxWidth(0.35f).height(120.dp)
-                        )
-                        Spacer(Modifier.height(16.dp))
-                        Text(
-                            "No supported images found in this folder.",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                if (!hasItems && !isIndexing && loadState?.refresh !is androidx.paging.LoadState.Loading) {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            ThumbnailPreview(
+                                path = coverPath,
+                                modifier = Modifier.fillMaxWidth(0.35f).height(120.dp)
+                            )
+                            Spacer(Modifier.height(16.dp))
+                            Text(
+                                "No supported images found in this folder.",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
-                }
-            }
-
-            if (sidebarExpanded) {
-                Column(
-                    modifier = Modifier.fillMaxWidth().onSizeChanged { size ->
-                        if (topOverlayHeightPx != size.height) topOverlayHeightPx = size.height
-                    }
-                ) {
-                    AlbumHeader(
-                        albumName = album.name,
-                        countLabel = headerCountLabel,
-                        isLoading = isLoading,
-                        progressMessage = progressMessage,
-                        collapsedStyle = false,
-                        onRegenerate = onRegenerate
-                    )
                 }
             }
         }
     }
-}
 
-@Composable
-private fun AlbumGridSkeleton() {
-    LazyVerticalGrid(
-        columns = GridCells.Adaptive(minSize = 148.dp),
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(
-            start = 18.dp, end = 18.dp, top = 10.dp, bottom = 18.dp
-        ),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        items(30) {
-            Box(
-                Modifier.fillMaxWidth()
-                    .aspectRatio(1f)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Color(0xFF202020))
-                    .border(1.dp, Color(0xFF353535), RoundedCornerShape(12.dp))
-            )
-        }
-    }
 }
 
 private data class GridScrollAnchor(val position: Int, val offsetFromPadding: Int)
