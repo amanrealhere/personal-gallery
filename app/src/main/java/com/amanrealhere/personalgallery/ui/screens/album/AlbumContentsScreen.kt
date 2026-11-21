@@ -490,9 +490,11 @@ private class CollapsedAlbumHeaderAdapter(
     override fun getItemCount() = if (visible) 1 else 0
 
     override fun onCreateViewHolder(parent: android.view.ViewGroup, viewType: Int): RecyclerView.ViewHolder {
+        val density = parent.context.resources.displayMetrics.density
+        fun dp(value: Int) = (value * density).toInt()
         val root = LinearLayout(parent.context).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(24, 20, 24, 20)
+            setPadding(dp(24), dp(16), dp(24), dp(16))
             layoutParams = RecyclerView.LayoutParams(
                 RecyclerView.LayoutParams.MATCH_PARENT,
                 RecyclerView.LayoutParams.WRAP_CONTENT
@@ -505,7 +507,7 @@ private class CollapsedAlbumHeaderAdapter(
         }
         val count = TextView(parent.context).apply {
             textSize = 13f
-            setPadding(16, 8, 16, 8)
+            setPadding(dp(12), dp(6), dp(12), dp(6))
             setTextColor(0xFF334155.toInt())
             setBackgroundColor(0xFFE2E8F0.toInt())
         }
