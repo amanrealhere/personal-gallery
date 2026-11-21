@@ -11,6 +11,14 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.border
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -78,7 +86,13 @@ fun AlbumContentsScreen(
     var initialPagingAccessHintSent by remember(pagingAdapter) { mutableStateOf(false) }
     DisposableEffect(pagingAdapter) {
         val observer = object : RecyclerView.AdapterDataObserver() {
-            private fun update() { hasItems = pagingAdapter.itemCount > 0 }
+            private fun update() {
+                hasItems = pagingAdapter.itemCount > 0
+                if (!initialPagingAccessHintSent && pagingAdapter.itemCount > 0) {
+                    initialPagingAccessHintSent = true
+                    pagingAdapter.getItem(0)
+                }
+            }
             override fun onChanged() = update()
             override fun onItemRangeInserted(positionStart: Int, itemCount: Int) = update()
             override fun onItemRangeRemoved(positionStart: Int, itemCount: Int) = update()
@@ -161,7 +175,7 @@ fun AlbumContentsScreen(
                             (18f * viewDensity).toInt()
                         )
                         // Adapter content affects header height and grid cell sizing.
-                        setHasFixedSize(false)
+                        setHasFixedSize(true)
                         setItemViewCacheSize(4)
                         itemAnimator = null
 
@@ -211,6 +225,11 @@ fun AlbumContentsScreen(
                         )
                     }
                     recyclerView = rv
+                    // Explicitly send an initial access hint after attachment.
+                    rv.post {
+                        if (pagingAdapter.itemCount > 0) pagingAdapter.getItem(0)
+                        rv.requestLayout()
+                    }
                     rv
                 },
                 update = { rv ->
@@ -231,9 +250,7 @@ fun AlbumContentsScreen(
             )
 
             if (!hasItems && (isIndexing || loadState?.refresh is androidx.paging.LoadState.Loading)) {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator()
-                }
+                AlbumGridSkeleton()
             } else if (!hasItems && loadState?.refresh !is androidx.paging.LoadState.Loading) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -267,6 +284,29 @@ fun AlbumContentsScreen(
                     )
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun AlbumGridSkeleton() {
+    LazyVerticalGrid(
+        columns = GridCells.Adaptive(minSize = 148.dp),
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(
+            start = 18.dp, end = 18.dp, top = 10.dp, bottom = 18.dp
+        ),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        items(30) {
+            Box(
+                Modifier.fillMaxWidth()
+                    .aspectRatio(1f)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(Color(0xFF202020))
+                    .border(1.dp, Color(0xFF353535), RoundedCornerShape(12.dp))
+            )
         }
     }
 }
