@@ -30,6 +30,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Icon
+import android.widget.LinearLayout
+import android.widget.TextView
+import android.widget.Button
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -48,8 +52,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.compose.ui.platform.ComposeView
-import androidx.compose.ui.platform.setContent
 import androidx.recyclerview.widget.ConcatAdapter
 import androidx.paging.CombinedLoadStates
 import androidx.paging.PagingData
@@ -488,25 +490,55 @@ private class CollapsedAlbumHeaderAdapter(
     override fun getItemCount() = if (visible) 1 else 0
 
     override fun onCreateViewHolder(parent: android.view.ViewGroup, viewType: Int): RecyclerView.ViewHolder {
-        val composeView = ComposeView(parent.context).apply {
+        val root = LinearLayout(parent.context).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(24, 20, 24, 20)
             layoutParams = RecyclerView.LayoutParams(
                 RecyclerView.LayoutParams.MATCH_PARENT,
                 RecyclerView.LayoutParams.WRAP_CONTENT
             )
         }
-        return object : RecyclerView.ViewHolder(composeView) {}
+        val title = TextView(parent.context).apply {
+            textSize = 22f
+            maxLines = 1
+            setTextColor(0xFF202124.toInt())
+        }
+        val count = TextView(parent.context).apply {
+            textSize = 13f
+            setPadding(16, 8, 16, 8)
+            setTextColor(0xFF334155.toInt())
+            setBackgroundColor(0xFFE2E8F0.toInt())
+        }
+        val row = LinearLayout(parent.context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = android.view.Gravity.CENTER_VERTICAL
+        }
+        row.addView(title, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        val diag = Button(parent.context).apply { text = "Diagnostics"; setOnClickListener { onDiagnostics() } }
+        val regen = Button(parent.context).apply { text = "Refresh"; setOnClickListener { onRegenerate() } }
+        row.addView(diag)
+        row.addView(regen)
+        root.addView(title)
+        root.addView(count)
+        root.addView(row)
+        return object : RecyclerView.ViewHolder(root) {
+            val titleView = title
+            val countView = count
+            val refreshButton = regen
+        }
     }
 
     override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
-        (holder.itemView as ComposeView).setContent {
-            AlbumHeader(
-                albumName = albumName,
-                imageCount = imageCount,
-                isLoading = isLoading,
-                progressMessage = progressMessage,
-                onDiagnostics = onDiagnostics,
-                onRegenerate = onRegenerate
-            )
+        val h = holder as? RecyclerView.ViewHolder ?: return
+        val root = h.itemView as LinearLayout
+        val titleView = root.getChildAt(0) as TextView
+        val countView = root.getChildAt(1) as TextView
+        val actionRow = root.getChildAt(2) as LinearLayout
+        titleView.text = albumName
+        countView.text = "$imageCount ${if (imageCount == 1) "image" else "images"}"
+        (actionRow.getChildAt(1) as Button).isEnabled = !isLoading
+        if (progressMessage != null) {
+            countView.text = countView.text.toString() + " · " + progressMessage
         }
     }
 }
