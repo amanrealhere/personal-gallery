@@ -58,7 +58,13 @@ class MediaIndexRepository(private val mediaItemDao: MediaItemDao) {
                     val isImageCandidate = child.extension.lowercase() in SUPPORTED_EXTENSIONS
                     if (!isImageCandidate) {
                         // Skip full NIO attribute reads for files outside the supported image types.
-                        if (child.isDirectory && !Files.isSymbolicLink(child.toPath())) pendingDirectories.add(child)
+                        if (child.isDirectory) {
+                            if (!Files.isSymbolicLink(child.toPath())) pendingDirectories.add(child)
+                        } else if (!child.canRead()) {
+                            // An unreadable entry could be a directory; avoid deleting stale
+                            // catalogue rows if this scan cannot confidently traverse it.
+                            complete = false
+                        }
                         continue
                     }
                     val attributes = try {
