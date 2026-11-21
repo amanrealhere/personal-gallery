@@ -34,6 +34,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.semantics.semantics
 import com.amanrealhere.personalgallery.R
 import com.amanrealhere.personalgallery.data.local.AlbumThumbnailStateEntity
 import com.amanrealhere.personalgallery.domain.model.Album
@@ -266,7 +267,7 @@ private fun CollapsedSidebarButton(
 ) {
     val shape = RoundedCornerShape(16.dp)
     Surface(
-        modifier = Modifier.size(56.dp).clip(shape).clickable(onClick = onClick),
+        modifier = Modifier.size(56.dp).clip(shape).clickable(onClick = onClick).semantics { this.contentDescription = contentDescription },
         shape = shape,
         color = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainerLow,
         border = if (selected) BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant) else null
