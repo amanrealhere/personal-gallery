@@ -34,7 +34,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -64,8 +63,6 @@ fun AlbumContentsScreen(
     isLoading: Boolean,
     onRegenerate: () -> Unit
 ) {
-    val context = LocalContext.current
-
     // Use a fresh PagingAdapter for each album to avoid carrying recycled cells
     // and adapter state across different PagingData generations.
     val pagingAdapter = remember(album.id) { MediaGridPagingAdapter() }
@@ -127,7 +124,7 @@ fun AlbumContentsScreen(
         images.collectLatest { pagingData -> pagingAdapter.submitData(pagingData) }
     }
 
-    LaunchedEffect(album.id, sidebarExpanded) {
+    LaunchedEffect(album.id) {
         recyclerView?.post {
             recyclerView?.stopScroll()
             val topPosition = if (sidebarExpanded) 1 else 0
