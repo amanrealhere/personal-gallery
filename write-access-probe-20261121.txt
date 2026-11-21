@@ -1,0 +1,2 @@
+Temporary repository write-access test.
+Created for permission verification and scheduled for deletion immediately.
