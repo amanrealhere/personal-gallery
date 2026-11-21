@@ -126,7 +126,7 @@ jobs:
           PY
 
           echo "Release title: $INPUT_RELEASE_TITLE"
-          echo "Release tag: $INPUT_RELEASE_TAG"
+          echo "Release tag: $RELEASE_TAG"
           echo "Short SHA: ${GITHUB_SHA:0:7}"
           echo "Full SHA: $GITHUB_SHA"
           echo "Release metadata validation successful."
