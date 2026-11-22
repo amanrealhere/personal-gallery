@@ -33,6 +33,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.key
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -100,7 +101,6 @@ fun AlbumContentsScreen(
     var minimumCellSizeDp by remember { mutableFloatStateOf(148f) }
     var recyclerView by remember { mutableStateOf<RecyclerView?>(null) }
     var expandedHeaderHeightPx by remember(album.id) { mutableStateOf(0) }
-    val expandedMode = remember(album.id) { mutableStateOf(sidebarExpanded) }
 
     // While scanning, report discoveries rather than presenting the previous catalogue total as current.
     val headerCountLabel = when {
@@ -118,18 +118,17 @@ fun AlbumContentsScreen(
             countLabel = headerCountLabel,
             isLoading = isLoading,
             progressMessage = progressMessage,
-            visible = true,
+            visible = !sidebarExpanded,
             onRegenerate = onRegenerate
         )
     }
     SideEffect {
-        expandedMode.value = sidebarExpanded
         headerAdapter.update(
             albumName = album.name,
             countLabel = headerCountLabel,
             isLoading = isLoading,
             progressMessage = progressMessage,
-            visible = true
+            visible = !sidebarExpanded
         )
     }
     val concatAdapter = remember(headerAdapter, pagingAdapter) {
@@ -150,7 +149,8 @@ fun AlbumContentsScreen(
 
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Box(Modifier.fillMaxSize().clipToBounds()) {
-            AndroidView(
+            key(album.id) {
+                AndroidView(
                 modifier = Modifier.fillMaxSize().clipToBounds(),
                     factory = { viewContext ->
                         val viewDensity = viewContext.resources.displayMetrics.density
@@ -175,10 +175,10 @@ fun AlbumContentsScreen(
                             }
                             gridLayoutManager.spanSizeLookup = object : GridLayoutManager.SpanSizeLookup() {
                                 override fun getSpanSize(position: Int): Int =
-                                    if (!expandedMode.value && position == 0) gridLayoutManager.spanCount else 1
+                                    if (position == 0) gridLayoutManager.spanCount else 1
                             }
                             layoutManager = gridLayoutManager
-                            adapter = if (sidebarExpanded) pagingAdapter else concatAdapter
+                            adapter = concatAdapter
                             tag = sidebarExpanded
                         }
 
@@ -223,25 +223,15 @@ fun AlbumContentsScreen(
                     update = { rv ->
                         val previousExpanded = (rv.tag as? Boolean) ?: sidebarExpanded
                         if (previousExpanded != sidebarExpanded) {
-                            val anchor = captureGridScrollAnchor(rv)
-                            val translatedPosition = when {
-                                previousExpanded && !sidebarExpanded -> (anchor?.position ?: 0) + 1
-                                !previousExpanded && sidebarExpanded -> (anchor?.position ?: 0) - 1
-                                else -> anchor?.position ?: 0
-                            }.coerceAtLeast(0)
+                            // Keep the header adapter at position 0 in both modes. Only the
+                            // padding and header visibility change, so photo positions never shift.
                             rv.setPadding(
                                 (18f * rv.resources.displayMetrics.density).toInt(),
                                 if (sidebarExpanded) expandedHeaderHeightPx else 0,
                                 (18f * rv.resources.displayMetrics.density).toInt(),
                                 (18f * rv.resources.displayMetrics.density).toInt()
                             )
-                            rv.adapter = if (sidebarExpanded) pagingAdapter else concatAdapter
                             rv.tag = sidebarExpanded
-                            (rv.layoutManager as? GridLayoutManager)?.spanSizeLookup?.invalidateSpanIndexCache()
-                            (rv.layoutManager as? GridLayoutManager)?.scrollToPositionWithOffset(
-                                translatedPosition,
-                                anchor?.offsetFromPadding ?: 0
-                            )
                         }
                         updateGridSpanCount(rv, rv.resources.displayMetrics.density, minimumCellSizeDp)
                     },
@@ -250,6 +240,7 @@ fun AlbumContentsScreen(
                         if (recyclerView === rv) recyclerView = null
                     }
                 )
+            }
 
                 if (sidebarExpanded) {
                     AlbumHeader(
