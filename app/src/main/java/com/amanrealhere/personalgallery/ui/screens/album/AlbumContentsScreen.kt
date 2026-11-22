@@ -105,15 +105,16 @@ fun AlbumContentsScreen(
         else -> "${imageCount} ${if (imageCount == 1) "image" else "images"}"
     }
 
-    // The expanded header lives outside the grid and stays fixed while scrolling.
-    // The collapsed header is a RecyclerView item and scrolls with the photos.
-    // Switching adapters preserves the first visible photo and its vertical offset.
+    // Keep the header as adapter position 0 in both sidebar modes. This keeps
+    // grid spans and photo adapter positions stable while the fixed expanded
+    // header is shown separately above the grid.
     val headerAdapter = remember(album.id) {
         CollapsedAlbumHeaderAdapter(
             albumName = album.name,
             countLabel = headerCountLabel,
             isLoading = isLoading,
             progressMessage = progressMessage,
+            visible = !sidebarExpanded,
             onRegenerate = onRegenerate
         )
     }
@@ -122,13 +123,13 @@ fun AlbumContentsScreen(
             albumName = album.name,
             countLabel = headerCountLabel,
             isLoading = isLoading,
-            progressMessage = progressMessage
+            progressMessage = progressMessage,
+            visible = !sidebarExpanded
         )
     }
-    val collapsedGridAdapter = remember(headerAdapter, pagingAdapter) {
+    val concatAdapter = remember(headerAdapter, pagingAdapter) {
         ConcatAdapter(headerAdapter, pagingAdapter)
     }
-    val gridAdapter = if (sidebarExpanded) pagingAdapter else collapsedGridAdapter
 
     LaunchedEffect(images, pagingAdapter) {
         images.collectLatest { pagingData -> pagingAdapter.submitData(pagingData) }
@@ -180,9 +181,12 @@ fun AlbumContentsScreen(
                             ).apply {
                                 isItemPrefetchEnabled = true
                             }
-                            configureHeaderSpan(gridLayoutManager, sidebarExpanded)
+                            gridLayoutManager.spanSizeLookup = object : GridLayoutManager.SpanSizeLookup() {
+                                override fun getSpanSize(position: Int): Int =
+                                    if (position == 0) gridLayoutManager.spanCount else 1
+                            }
                             layoutManager = gridLayoutManager
-                            adapter = gridAdapter
+                            adapter = concatAdapter
                         }
 
                         val scaleDetector = ScaleGestureDetector(
@@ -224,15 +228,7 @@ fun AlbumContentsScreen(
                         rv
                     },
                     update = { rv ->
-                        if (rv.adapter !== gridAdapter) {
-                            val previousHeaderPresent = rv.adapter === collapsedGridAdapter
-                            val anchor = capturePhotoScrollAnchor(rv, previousHeaderPresent)
-                            rv.adapter = gridAdapter
-                            (rv.layoutManager as? GridLayoutManager)?.let { layoutManager ->
-                                configureHeaderSpan(layoutManager, sidebarExpanded)
-                                restorePhotoScrollAnchor(rv, anchor, sidebarExpanded)
-                            }
-                        }
+                        if (rv.adapter !== concatAdapter) rv.adapter = concatAdapter
                         updateGridSpanCount(rv, rv.resources.displayMetrics.density, minimumCellSizeDp)
                     },
                     onRelease = { rv ->
@@ -264,32 +260,6 @@ fun AlbumContentsScreen(
 }
 
 private data class GridScrollAnchor(val position: Int, val offsetFromPadding: Int)
-private data class PhotoScrollAnchor(val photoPosition: Int, val offsetFromPadding: Int)
-
-private fun configureHeaderSpan(layoutManager: GridLayoutManager, headerPresent: Boolean) {
-    layoutManager.spanSizeLookup = object : GridLayoutManager.SpanSizeLookup() {
-        override fun getSpanSize(position: Int): Int =
-            if (headerPresent && position == 0) layoutManager.spanCount else 1
-    }
-}
-
-private fun capturePhotoScrollAnchor(recyclerView: RecyclerView, headerPresent: Boolean): PhotoScrollAnchor? {
-    val layoutManager = recyclerView.layoutManager as? GridLayoutManager ?: return null
-    var firstPosition = layoutManager.findFirstVisibleItemPosition()
-    if (firstPosition == RecyclerView.NO_POSITION) return null
-    if (headerPresent && firstPosition == 0) firstPosition = 1
-    val photoPosition = if (headerPresent) (firstPosition - 1).coerceAtLeast(0) else firstPosition
-    val adapterPosition = photoPosition + if (headerPresent) 1 else 0
-    val child = layoutManager.findViewByPosition(adapterPosition)
-    return PhotoScrollAnchor(photoPosition, (child?.top ?: recyclerView.paddingTop) - recyclerView.paddingTop)
-}
-
-private fun restorePhotoScrollAnchor(recyclerView: RecyclerView, anchor: PhotoScrollAnchor?, headerPresent: Boolean) {
-    if (anchor == null) return
-    val layoutManager = recyclerView.layoutManager as? GridLayoutManager ?: return
-    val adapterPosition = anchor.photoPosition + if (headerPresent) 1 else 0
-    layoutManager.scrollToPositionWithOffset(adapterPosition, anchor.offsetFromPadding)
-}
 
 private fun captureGridScrollAnchor(recyclerView: RecyclerView): GridScrollAnchor? {
     val layoutManager = recyclerView.layoutManager as? GridLayoutManager ?: return null
@@ -419,33 +389,38 @@ private class CollapsedAlbumHeaderAdapter(
     countLabel: String,
     isLoading: Boolean,
     progressMessage: String?,
+    visible: Boolean,
     private val onRegenerate: () -> Unit
 ) : RecyclerView.Adapter<CollapsedAlbumHeaderAdapter.HeaderViewHolder>() {
     private var albumName by mutableStateOf(albumName)
     private var countLabel by mutableStateOf(countLabel)
     private var isLoading by mutableStateOf(isLoading)
     private var progressMessage by mutableStateOf(progressMessage)
+    private var visible by mutableStateOf(visible)
 
     fun update(
         albumName: String,
         countLabel: String,
         isLoading: Boolean,
-        progressMessage: String?
+        progressMessage: String?,
+        visible: Boolean
     ) {
         val changed = this.albumName != albumName ||
             this.countLabel != countLabel ||
             this.isLoading != isLoading ||
-            this.progressMessage != progressMessage
+            this.progressMessage != progressMessage ||
+            this.visible != visible
         if (!changed) return
         this.albumName = albumName
         this.countLabel = countLabel
         this.isLoading = isLoading
         this.progressMessage = progressMessage
+        this.visible = visible
         notifyItemChanged(0)
     }
 
-    // This adapter is attached only while the sidebar is collapsed, so its
-    // header scrolls with the grid. Expanded mode uses the fixed Compose header.
+    // The header stays at adapter position 0 to stabilize photo grid spans.
+    // It is hidden in expanded mode; the fixed Compose header is used instead.
     override fun getItemCount() = 1
 
     override fun onCreateViewHolder(parent: android.view.ViewGroup, viewType: Int): HeaderViewHolder {
@@ -470,7 +445,7 @@ private class CollapsedAlbumHeaderAdapter(
     }
 
     override fun onBindViewHolder(holder: HeaderViewHolder, position: Int) {
-        holder.itemView.visibility = View.VISIBLE
+        holder.itemView.visibility = if (visible) View.VISIBLE else View.GONE
     }
 
     override fun onViewRecycled(holder: HeaderViewHolder) {

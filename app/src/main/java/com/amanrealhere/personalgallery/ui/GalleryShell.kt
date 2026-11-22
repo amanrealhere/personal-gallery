@@ -12,8 +12,8 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.width
 import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
@@ -127,7 +127,7 @@ fun GalleryShell(viewModel: GalleryViewModel) {
     // Reconcile on album selection only; avoid restarting the scan on resume.
     val sidebarWidth by animateDpAsState(
         targetValue = if (sidebarExpanded) 280.dp else 76.dp,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = 900f),
+        animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing),
         label = "sidebar width"
     )
 
