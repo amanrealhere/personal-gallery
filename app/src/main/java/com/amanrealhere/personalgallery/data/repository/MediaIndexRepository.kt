@@ -47,7 +47,7 @@ class MediaIndexRepository(private val mediaItemDao: MediaItemDao) {
 
         try {
             coroutineScope {
-                val directories = Channel<File>(Channel.UNLIMITED)
+                val directories = Channel<File>(DIRECTORY_QUEUE_CAPACITY)
                 val discoveredImages = Channel<MediaItemStagingEntity>(IMAGE_CHANNEL_CAPACITY)
                 val activeDirectories = AtomicInteger(1)
                 directories.trySend(folder)
@@ -84,7 +84,10 @@ class MediaIndexRepository(private val mediaItemDao: MediaItemDao) {
                                         if (!isSupportedImageName(child.name)) {
                                             if (Files.isDirectory(entry, LinkOption.NOFOLLOW_LINKS)) {
                                                 activeDirectories.incrementAndGet()
-                                                directories.trySend(child)
+                                                if (directories.trySend(child).isFailure) {
+                                                    activeDirectories.decrementAndGet()
+                                                    complete.set(false)
+                                                }
                                             }
                                             continue
                                         }
@@ -103,7 +106,10 @@ class MediaIndexRepository(private val mediaItemDao: MediaItemDao) {
                                         if (attributes.isSymbolicLink) continue
                                         if (attributes.isDirectory) {
                                             activeDirectories.incrementAndGet()
-                                            directories.trySend(child)
+                                            if (directories.trySend(child).isFailure) {
+                                                activeDirectories.decrementAndGet()
+                                                complete.set(false)
+                                            }
                                         } else if (attributes.isRegularFile) {
                                             val absolutePath = child.absolutePath
                                             discoveredImages.send(
@@ -163,6 +169,7 @@ class MediaIndexRepository(private val mediaItemDao: MediaItemDao) {
     companion object {
         private const val BATCH_SIZE = 512
         private const val WORKER_COUNT = 4
+        private const val DIRECTORY_QUEUE_CAPACITY = 256
         private const val IMAGE_CHANNEL_CAPACITY = 1024
         private const val PROGRESS_INTERVAL = 256
     }
