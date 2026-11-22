@@ -101,6 +101,8 @@ class MediaIndexRepository(private val mediaItemDao: MediaItemDao) {
                                 }
                             }
                         }
+                    } catch (exception: CancellationException) {
+                        throw exception
                     } catch (_: Exception) {
                         complete = false
                     }
