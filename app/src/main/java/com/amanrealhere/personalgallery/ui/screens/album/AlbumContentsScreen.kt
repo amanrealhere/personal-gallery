@@ -151,7 +151,7 @@ fun AlbumContentsScreen(
                             clipToPadding = true
                             setPadding(
                                 (18f * viewDensity).toInt(),
-                                if (sidebarExpanded) expandedHeaderHeightPx else 0,
+                                if (sidebarExpanded) expandedGridTopPaddingPx(expandedHeaderHeightPx, viewDensity) else 0,
                                 (18f * viewDensity).toInt(),
                                 (18f * viewDensity).toInt()
                             )
@@ -223,7 +223,7 @@ fun AlbumContentsScreen(
                             // padding and header visibility change, so photo positions never shift.
                             rv.setPadding(
                                 (18f * rv.resources.displayMetrics.density).toInt(),
-                                if (sidebarExpanded) expandedHeaderHeightPx else 0,
+                                if (sidebarExpanded) expandedGridTopPaddingPx(expandedHeaderHeightPx, viewDensity) else 0,
                                 (18f * rv.resources.displayMetrics.density).toInt(),
                                 (18f * rv.resources.displayMetrics.density).toInt()
                             )
@@ -250,7 +250,12 @@ fun AlbumContentsScreen(
                             if (expandedHeaderHeightPx != size.height) {
                                 expandedHeaderHeightPx = size.height
                                 recyclerView?.let { rv ->
-                                    rv.setPadding(rv.paddingLeft, size.height, rv.paddingRight, rv.paddingBottom)
+                                    rv.setPadding(
+                                        rv.paddingLeft,
+                                        expandedGridTopPaddingPx(size.height, rv.resources.displayMetrics.density),
+                                        rv.paddingRight,
+                                        rv.paddingBottom
+                                    )
                                     rv.requestLayout()
                                 }
                             }
@@ -278,6 +283,16 @@ fun AlbumContentsScreen(
     }
 
 }
+
+private fun expandedGridTopPaddingPx(headerHeightPx: Int, density: Float): Int {
+    // The expanded header is pinned above the RecyclerView, while the hidden
+    // ConcatAdapter header slot can still contribute layout space. Offset the
+    // grid upward to avoid the oversized gap, but retain a small breathing room.
+    val reducedHeaderOffset = (72f * density).toInt()
+    val minimumGap = (24f * density).toInt()
+    return (headerHeightPx - reducedHeaderOffset).coerceAtLeast(minimumGap)
+}
+
 
 private data class GridScrollAnchor(val position: Int, val offsetFromPadding: Int)
 
