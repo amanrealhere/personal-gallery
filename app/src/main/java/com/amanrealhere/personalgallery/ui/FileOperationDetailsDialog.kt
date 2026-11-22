@@ -23,6 +23,7 @@ import com.amanrealhere.personalgallery.data.fileoperations.MediaFileOperationWo
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.io.RandomAccessFile
 
 @androidx.compose.runtime.Composable
 fun FileOperationDetailsDialog(
