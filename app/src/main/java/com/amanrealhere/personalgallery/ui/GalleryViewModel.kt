@@ -16,6 +16,8 @@ import com.amanrealhere.personalgallery.data.local.MediaItemEntity
 import com.amanrealhere.personalgallery.data.repository.AlbumRegistrationResult
 import com.amanrealhere.personalgallery.data.repository.AlbumRepository
 import com.amanrealhere.personalgallery.data.repository.MediaIndexRepository
+import com.amanrealhere.personalgallery.data.fileoperations.MediaFileOperationScheduler
+import com.amanrealhere.personalgallery.data.fileoperations.MediaFileOperationWorker
 import com.amanrealhere.personalgallery.data.thumbnail.ThumbnailGenerationWorker
 import com.amanrealhere.personalgallery.data.thumbnail.ThumbnailWorkScheduler
 import com.amanrealhere.personalgallery.domain.model.Album
@@ -25,6 +27,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -42,6 +46,60 @@ class GalleryViewModel(
     private val database = galleryApplication.database
     private val repository = AlbumRepository(database.albumDao())
     private val mediaIndexRepository = MediaIndexRepository(database.mediaItemDao())
+
+    private val _fileOperationMessages = MutableSharedFlow<String>(extraBufferCapacity = 4)
+    val fileOperationMessages = _fileOperationMessages.asSharedFlow()
+
+    fun startFileOperation(type: String, sourcePaths: List<String>, destinationAlbum: Album) {
+        val uniqueSources = sourcePaths.distinct()
+        if (uniqueSources.isEmpty()) return
+        viewModelScope.launch {
+            try {
+                val operationId = MediaFileOperationScheduler.enqueue(
+                    getApplication(),
+                    type,
+                    uniqueSources,
+                    destinationAlbum.canonicalPath
+                )
+                val workManager = WorkManager.getInstance(getApplication<Application>())
+                val finishedWork = workManager.getWorkInfosByTagFlow(MediaFileOperationWorker.TAG)
+                    .first { infos -> infos.any { it.id.toString() == operationId && it.state.isFinished } }
+                    .first { it.id.toString() == operationId }
+
+                val output = finishedWork.outputData
+                val succeeded = output.getInt(MediaFileOperationWorker.KEY_SUCCEEDED, 0)
+                val failed = output.getInt(MediaFileOperationWorker.KEY_FAILED, uniqueSources.size)
+                val errors = output.getString(MediaFileOperationWorker.KEY_ERRORS).orEmpty()
+                val summary = output.getString(MediaFileOperationWorker.KEY_SUMMARY)
+                    ?: output.getString(MediaFileOperationWorker.KEY_ERROR)
+                    ?: "${succeeded} completed, ${failed} failed"
+
+                // Refresh the registered albums affected by these paths, then update their covers.
+                val sourceAlbums = albums.value.filter { album ->
+                    uniqueSources.any { path ->
+                        path.startsWith(album.canonicalPath.trimEnd(File.separator) + File.separator)
+                    }
+                }
+                val affectedAlbums = (sourceAlbums + destinationAlbum).distinctBy { it.id }
+                for (album in affectedAlbums) {
+                    mediaIndexRepository.reconcileAlbum(album.id, File(album.canonicalPath))
+                    ThumbnailWorkScheduler.enqueueAlbum(getApplication(), album.id, force = false)
+                }
+
+                val verb = if (type == MediaFileOperationWorker.TYPE_MOVE) "Moved" else "Copied"
+                val message = if (failed == 0 && succeeded > 0) {
+                    "$verb ${succeeded} item${if (succeeded == 1) "" else "s"} to ${destinationAlbum.name}"
+                } else {
+                    "$verb ${succeeded}; ${failed} failed"
+                }
+                _fileOperationMessages.emit(message)
+            } catch (exception: CancellationException) {
+                throw exception
+            } catch (exception: Exception) {
+                _fileOperationMessages.emit("File operation failed: ${exception.message ?: "unknown error"}")
+            }
+        }
+    }
 
     val albums: StateFlow<List<Album>> = repository.observeAlbums().stateIn(
         scope = viewModelScope,

@@ -20,15 +20,26 @@ import java.io.File
  * Keeps Room/Paging3 for large albums while using recycled native Views for cells.
  * Each Glide request is keyed by source identity and media metadata.
  */
-class MediaGridPagingAdapter :
-    PagingDataAdapter<MediaItemEntity, MediaGridPagingAdapter.MediaViewHolder>(DIFF) {
+class MediaGridPagingAdapter(
+    private var selectedPaths: Set<String> = emptySet(),
+    private var onToggleSelection: ((String) -> Unit)? = null
+) : PagingDataAdapter<MediaItemEntity, MediaGridPagingAdapter.MediaViewHolder>(DIFF) {
+
+    private var selectionMode = selectedPaths.isNotEmpty()
+
+    fun updateSelection(paths: Set<String>, onToggle: (String) -> Unit) {
+        selectedPaths = paths
+        selectionMode = paths.isNotEmpty()
+        onToggleSelection = onToggle
+        notifyDataSetChanged()
+    }
 
     override fun onCreateViewHolder(parent: android.view.ViewGroup, viewType: Int): MediaViewHolder =
         MediaViewHolder(MediaGridItemView(parent.context))
 
     override fun onBindViewHolder(holder: MediaViewHolder, position: Int) {
         val media = getItem(position)
-        if (media != null) holder.bind(media) else holder.clear()
+        if (media != null) holder.bind(media, media.sourcePath in selectedPaths, selectionMode, onToggleSelection) else holder.clear()
     }
 
     override fun onViewRecycled(holder: MediaViewHolder) {
@@ -42,7 +53,8 @@ class MediaGridPagingAdapter :
     }
 
     class MediaViewHolder(private val cell: MediaGridItemView) : RecyclerView.ViewHolder(cell) {
-        fun bind(media: MediaItemEntity) = cell.bind(media)
+        fun bind(media: MediaItemEntity, selected: Boolean, selectionMode: Boolean, onToggle: ((String) -> Unit)?) =
+            cell.bind(media, selected, selectionMode, onToggle)
         fun clear() = cell.clear()
     }
 
@@ -59,6 +71,8 @@ class MediaGridPagingAdapter :
 class MediaGridItemView(context: android.content.Context) : FrameLayout(context) {
     private val thumbnail = ImageView(context)
     private val filename = TextView(context)
+    private val selectedScrim = View(context)
+    private val checkBadge = TextView(context)
     private var currentRequestKey: String? = null
 
     init {
@@ -79,6 +93,25 @@ class MediaGridItemView(context: android.content.Context) : FrameLayout(context)
         }
         addView(thumbnail, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
 
+        selectedScrim.apply {
+            visibility = View.GONE
+            setBackgroundColor(0x443D8BFF)
+        }
+        addView(selectedScrim, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        checkBadge.apply {
+            text = ""
+            textSize = 14f
+            gravity = android.view.Gravity.CENTER
+            setTextColor(0xFF0B1D30.toInt())
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(0xFFB8D8FF.toInt())
+            }
+        }
+        addView(checkBadge, LayoutParams(dp(28), dp(28), android.view.Gravity.TOP or android.view.Gravity.END).apply {
+            setMargins(dp(8), dp(8), dp(8), dp(8))
+        })
+
         filename.apply {
             setTextColor(0xFFEAEAEA.toInt())
             textSize = 12f
@@ -97,14 +130,33 @@ class MediaGridItemView(context: android.content.Context) : FrameLayout(context)
         )
     }
 
+    private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
+
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         val width = View.MeasureSpec.getSize(widthMeasureSpec)
         super.onMeasure(widthMeasureSpec, View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY))
         setMeasuredDimension(width, width)
     }
 
-    fun bind(media: MediaItemEntity) {
+    fun bind(media: MediaItemEntity, selected: Boolean, selectionMode: Boolean, onToggleSelection: ((String) -> Unit)?) {
         filename.text = media.displayName
+        selectedScrim.visibility = if (selected) View.VISIBLE else View.GONE
+        checkBadge.visibility = if (selected) View.VISIBLE else View.GONE
+        checkBadge.text = if (selected) "✓" else ""
+        background = GradientDrawable().apply {
+            cornerRadius = dp(12).toFloat()
+            setColor(0xFF202020.toInt())
+            setStroke(dp(if (selected) 2 else 1), if (selected) 0xFF90CAF9.toInt() else 0xFF353535.toInt()
+        }
+        isClickable = true
+        isLongClickable = true
+        setOnClickListener {
+            if (selectionMode) onToggleSelection?.invoke(media.sourcePath)
+        }
+        setOnLongClickListener {
+            onToggleSelection?.invoke(media.sourcePath)
+            true
+        }
         val cacheKey = "${media.sourceCanonicalPath}|${media.fileSizeBytes}|" +
             "${media.modifiedAtEpochMillis}|grid-center-crop-224dp-v2"
         val requestKey = "${media.sourcePath}|$cacheKey"
@@ -127,6 +179,10 @@ class MediaGridItemView(context: android.content.Context) : FrameLayout(context)
         Glide.with(thumbnail).clear(thumbnail)
         thumbnail.setImageDrawable(null)
         filename.text = ""
+        selectedScrim.visibility = View.GONE
+        checkBadge.visibility = View.GONE
+        setOnClickListener(null)
+        setOnLongClickListener(null)
         currentRequestKey = null
     }
 }

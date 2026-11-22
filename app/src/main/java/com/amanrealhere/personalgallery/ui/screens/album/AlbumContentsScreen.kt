@@ -3,6 +3,10 @@ package com.amanrealhere.personalgallery.ui.screens.album
 import android.view.ScaleGestureDetector
 import android.view.View
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -20,6 +24,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -66,11 +73,22 @@ fun AlbumContentsScreen(
     coverPath: String?,
     progressMessage: String?,
     isLoading: Boolean,
+    albums: List<Album>,
+    onFileOperation: (type: String, sourcePaths: List<String>, destination: Album) -> Unit,
     onRegenerate: () -> Unit
 ) {
+    var selectedPaths by remember(album.id) { mutableStateOf<Set<String>>(emptySet()) }
+    var destinationPickerOpen by remember(album.id) { mutableStateOf(false) }
+    var pendingOperationType by remember(album.id) { mutableStateOf("COPY") }
+
     // Use a fresh PagingAdapter for each album to avoid carrying recycled cells
     // and adapter state across different PagingData generations.
     val pagingAdapter = remember(album.id) { MediaGridPagingAdapter() }
+    LaunchedEffect(selectedPaths, pagingAdapter) {
+        pagingAdapter.updateSelection(selectedPaths) { path ->
+            selectedPaths = if (path in selectedPaths) selectedPaths - path else selectedPaths + path
+        }
+    }
     var loadState by remember(pagingAdapter) { mutableStateOf<androidx.paging.CombinedLoadStates?>(null) }
     LaunchedEffect(pagingAdapter) {
         pagingAdapter.loadStateFlow.collect { loadState = it }
@@ -259,6 +277,72 @@ fun AlbumContentsScreen(
                                     rv.requestLayout()
                                 }
                             }
+                        }
+                    )
+                }
+
+                if (selectedPaths.isNotEmpty()) {
+                    Surface(
+                        modifier = Modifier.align(Alignment.TopCenter).padding(8.dp).zIndex(4f),
+                        shape = RoundedCornerShape(24.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        shadowElevation = 6.dp
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text("${selectedPaths.size} selected", style = MaterialTheme.typography.titleSmall)
+                            TextButton(onClick = {
+                                pendingOperationType = "COPY"
+                                destinationPickerOpen = true
+                            }) { Text("Copy to") }
+                            TextButton(onClick = {
+                                pendingOperationType = "MOVE"
+                                destinationPickerOpen = true
+                            }) { Text("Move to") }
+                            TextButton(onClick = { selectedPaths = emptySet() }) { Text("Done") }
+                        }
+                    }
+                }
+
+                if (destinationPickerOpen) {
+                    AlertDialog(
+                        onDismissRequest = { destinationPickerOpen = false },
+                        title = { Text(if (pendingOperationType == "COPY") "Copy to album" else "Move to album") },
+                        text = {
+                            LazyColumn(modifier = Modifier.heightIn(max = 360.dp)) {
+                                items(albums, key = { it.id }) { destinationAlbum ->
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth()
+                                            .clickable(enabled = pendingOperationType != "MOVE" || destinationAlbum.id != album.id) {
+                                                val snapshot = selectedPaths.toList()
+                                                destinationPickerOpen = false
+                                                onFileOperation(pendingOperationType, snapshot, destinationAlbum)
+                                                selectedPaths = emptySet()
+                                            }
+                                            .padding(vertical = 14.dp, horizontal = 8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column {
+                                            Text(destinationAlbum.name, style = MaterialTheme.typography.bodyLarge)
+                                            Text(
+                                                destinationAlbum.canonicalPath,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                            if (pendingOperationType == "MOVE" && destinationAlbum.id == album.id) {
+                                                Text("Current album", style = MaterialTheme.typography.labelSmall)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        confirmButton = {},
+                        dismissButton = {
+                            TextButton(onClick = { destinationPickerOpen = false }) { Text("Cancel") }
                         }
                     )
                 }

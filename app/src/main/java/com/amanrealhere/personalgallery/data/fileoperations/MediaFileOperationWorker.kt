@@ -10,6 +10,7 @@ import androidx.work.ForegroundInfo
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
@@ -17,7 +18,6 @@ import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.nio.file.Files
-import java.nio.file.StandardCopyOption
 import java.util.UUID
 
 class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
@@ -53,10 +53,21 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
             if (isStopped) break
             val sourcePath = sourcePaths.optString(index)
             val source = File(sourcePath)
+            setProgress(workDataOf(
+                KEY_PROCESSED to processed,
+                KEY_TOTAL to total,
+                KEY_SUCCEEDED to succeeded,
+                KEY_FAILED to failed,
+                KEY_CURRENT to source.name,
+                KEY_STATUS to (if (type == TYPE_MOVE) "Moving" else "Copying")
+            ))
+            setForeground(createForegroundInfo(type, processed, total, "${if (type == TYPE_MOVE) "Moving" else "Copying"} · ${source.name}"))
             try {
-                val result = if (type == TYPE_MOVE) moveOne(source, destinationDirectory)
+                val result = if (type == TYPE_MOVE) moveOne(source, destinationDirectory, processed, total, succeeded, failed)
                     else copyOne(source, destinationDirectory)
                 if (result) succeeded++ else failed++
+            } catch (exception: CancellationException) {
+                throw exception
             } catch (exception: Exception) {
                 failed++
                 failureMessages += "${source.name}: ${exception.message ?: "Operation failed"}"
@@ -68,13 +79,13 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
                 KEY_TOTAL to total,
                 KEY_SUCCEEDED to succeeded,
                 KEY_FAILED to failed,
-                KEY_CURRENT to source.name
+                KEY_CURRENT to source.name,
+                KEY_STATUS to (if (type == TYPE_MOVE) "Moving" else "Copying")
             ))
             setForeground(createForegroundInfo(type, processed, total, "$label · ${source.name}"))
         }
 
         requestFile.delete()
-        val stopped = isStopped
         val summary = "$succeeded succeeded, $failed failed"
         postCompletionNotification(type, summary)
         Result.success(workDataOf(
@@ -97,7 +108,7 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
         try {
             FileInputStream(source).use { input ->
                 FileOutputStream(temporary).use { output ->
-                    input.copyTo(output, DEFAULT_BUFFER_SIZE)
+                    input.copyTo(output, 1024 * 1024)
                     output.fd.sync()
                 }
             }
@@ -122,17 +133,15 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
         }
     }
 
-    private fun moveOne(source: File, destinationDirectory: File): Boolean {
+    private suspend fun moveOne(source: File, destinationDirectory: File, processed: Int, total: Int, succeeded: Int, failed: Int): Boolean {
         if (!source.isFile || !source.canRead()) throw IllegalStateException("Source is unavailable")
         val originalSize = source.length()
         val originalModified = source.lastModified()
+        if (source.parentFile?.canonicalPath == destinationDirectory.canonicalPath) return true
         val destination = uniqueDestination(destinationDirectory, source.name)
 
-        val sameFileStore = try {
+        val sameFileStore =
             Files.getFileStore(source.toPath()) == Files.getFileStore(destinationDirectory.toPath())
-        } catch (_: Exception) {
-            false
-        }
 
         if (sameFileStore) {
             try {
@@ -148,6 +157,13 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
         }
 
         // Cross-filesystem fallback: copy, verify logical size and mtime, then delete source.
+        setProgress(workDataOf(
+            KEY_PROCESSED to processed, KEY_TOTAL to total,
+            KEY_SUCCEEDED to succeeded, KEY_FAILED to failed,
+            KEY_CURRENT to source.name, KEY_STATUS to "Different storage · Copying before deletion"
+        ))
+        setForeground(createForegroundInfo(type = TYPE_MOVE, processed = processed, total = total,
+            status = "Different storage · Copying ${source.name} before deletion"))
         copyOne(source, destinationDirectory)
         val copied = File(destinationDirectory, destination.name)
         if (!copied.isFile || copied.length() != originalSize ||
@@ -187,7 +203,11 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .build()
-        return ForegroundInfo(NOTIFICATION_ID, notification)
+        return ForegroundInfo(
+            NOTIFICATION_ID,
+            notification,
+            android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+        )
     }
 
     private fun postCompletionNotification(type: String, summary: String) {
@@ -223,6 +243,7 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
         const val KEY_SUMMARY = "summary"
         const val KEY_ERRORS = "errors"
         const val KEY_ERROR = "error"
+        const val KEY_STATUS = "status"
         const val TYPE_COPY = "COPY"
         const val TYPE_MOVE = "MOVE"
         const val TAG = "personal-gallery-file-operation"

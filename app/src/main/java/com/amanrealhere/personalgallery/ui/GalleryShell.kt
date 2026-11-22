@@ -7,15 +7,20 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.padding
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -24,11 +29,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import android.widget.Toast
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.work.WorkInfo
 import com.amanrealhere.personalgallery.data.storage.GalleryStorage
+import com.amanrealhere.personalgallery.data.fileoperations.MediaFileOperationWorker
 import com.amanrealhere.personalgallery.domain.model.Album
 import com.amanrealhere.personalgallery.ui.screens.addalbum.AddAlbumScreen
 import com.amanrealhere.personalgallery.ui.screens.album.AlbumContentsScreen
@@ -44,6 +51,7 @@ fun GalleryShell(viewModel: GalleryViewModel) {
     var selectedAlbumPath by remember { mutableStateOf<String?>(null) }
     var destination by remember { mutableStateOf(GalleryDestination.Albums) }
     val pendingGeneration = remember { mutableStateOf<(() -> Unit)?>(null) }
+    val pendingFileOperation = remember { mutableStateOf<(() -> Unit)?>(null) }
 
     val albums by viewModel.albums.collectAsStateWithLifecycle()
     val thumbnailStates by viewModel.thumbnailStates.collectAsStateWithLifecycle()
@@ -57,6 +65,20 @@ fun GalleryShell(viewModel: GalleryViewModel) {
     val scanFinished by viewModel.scanFinished.collectAsStateWithLifecycle()
     val scanComplete by viewModel.scanComplete.collectAsStateWithLifecycle()
     val workInfos by viewModel.thumbnailWorkInfos.collectAsStateWithLifecycle(initialValue = emptyList())
+    val fileOperationWorkInfos by WorkManager.getInstance(context)
+        .getWorkInfosByTagFlow(MediaFileOperationWorker.TAG)
+        .collectAsStateWithLifecycle(initialValue = emptyList())
+    val activeFileOperation = fileOperationWorkInfos.firstOrNull { it.state == WorkInfo.State.RUNNING }
+    val fileOperationProcessed = activeFileOperation?.progress?.getInt(MediaFileOperationWorker.KEY_PROCESSED, 0) ?: 0
+    val fileOperationTotal = activeFileOperation?.progress?.getInt(MediaFileOperationWorker.KEY_TOTAL, 0) ?: 0
+    val fileOperationCurrent = activeFileOperation?.progress?.getString(MediaFileOperationWorker.KEY_CURRENT).orEmpty()
+    val fileOperationStatus = activeFileOperation?.progress?.getString(MediaFileOperationWorker.KEY_STATUS)
+        ?: if (activeFileOperation != null) "Working…" else ""
+    LaunchedEffect(viewModel) {
+        viewModel.fileOperationMessages.collect { message ->
+            Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+        }
+    }
 
     val selectedAlbum = remember(albums, selectedAlbumPath) {
         albums.firstOrNull { it.canonicalPath == selectedAlbumPath }
@@ -93,6 +115,23 @@ fun GalleryShell(viewModel: GalleryViewModel) {
     ) {
         pendingGeneration.value?.invoke()
         pendingGeneration.value = null
+        pendingFileOperation.value?.invoke()
+        pendingFileOperation.value = null
+    }
+
+    fun startFileOperation(action: () -> Unit) {
+        if (Build.VERSION.SDK_INT >= 33 &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            val marker = File(GalleryStorage.getInstance(context).root, ".notification-permission-requested")
+            if (!marker.exists()) {
+                marker.createNewFile()
+                pendingFileOperation.value = action
+                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                return
+            }
+        }
+        action()
     }
 
     fun startGeneration(action: () -> Unit) {
@@ -185,6 +224,12 @@ fun GalleryShell(viewModel: GalleryViewModel) {
                                         AlbumContentsScreen(
                                 sidebarExpanded = sidebarExpanded,
                                 album = selectedAlbum,
+                                albums = albums,
+                                onFileOperation = { type, sourcePaths, destinationAlbum ->
+                                    startFileOperation {
+                                        viewModel.startFileOperation(type, sourcePaths, destinationAlbum)
+                                    }
+                                },
                                 images = images,
                                 imageCount = indexedImageCount,
                                 liveScanImageCount = liveScanImageCount,
@@ -211,6 +256,35 @@ fun GalleryShell(viewModel: GalleryViewModel) {
                                 destination = GalleryDestination.Albums
                             }
                         )
+                    }
+                }
+
+                if (activeFileOperation != null) {
+                    Surface(
+                        modifier = Modifier.align(androidx.compose.ui.Alignment.BottomCenter)
+                            .padding(16.dp),
+                        shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        shadowElevation = 5.dp
+                    ) {
+                        Column(Modifier.padding(horizontal = 18.dp, vertical = 12.dp)) {
+                            Text(
+                                if (fileOperationTotal > 0) "$fileOperationStatus · $fileOperationProcessed / $fileOperationTotal"
+                                else fileOperationStatus,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            if (fileOperationTotal > 0) {
+                                LinearProgressIndicator(
+                                    progress = { (fileOperationProcessed.toFloat() / fileOperationTotal).coerceIn(0f, 1f) },
+                                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+                                )
+                            } else {
+                                LinearProgressIndicator(modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
+                            }
+                            if (fileOperationCurrent.isNotBlank()) {
+                                Text(fileOperationCurrent, style = MaterialTheme.typography.labelSmall)
+                            }
+                        }
                     }
                 }
             }
