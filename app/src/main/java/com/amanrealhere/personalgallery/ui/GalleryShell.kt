@@ -72,7 +72,11 @@ fun GalleryShell(viewModel: GalleryViewModel) {
     val fileOperationId by viewModel.fileOperationId.collectAsStateWithLifecycle()
     var fileOperationDialogVisible by remember { mutableStateOf(false) }
     LaunchedEffect(fileOperationId) {
-        if (fileOperationId != null) fileOperationDialogVisible = true
+        if (fileOperationId != null) {
+            val dismissedId = context.getSharedPreferences("file-operation-ui", 0)
+                .getString("dismissed_operation_id", null)
+            fileOperationDialogVisible = dismissedId != fileOperationId
+        }
     }
     val selectedFileOperation = fileOperationWorkInfos.firstOrNull { it.id.toString() == fileOperationId }
     val activeFileOperation = fileOperationWorkInfos.firstOrNull { it.state == WorkInfo.State.RUNNING }
@@ -300,7 +304,11 @@ fun GalleryShell(viewModel: GalleryViewModel) {
     if (fileOperationDialogVisible && selectedFileOperation != null) {
         FileOperationDetailsDialog(
             workInfo = selectedFileOperation,
-            onDismiss = { fileOperationDialogVisible = false }
+            onDismiss = {
+                context.getSharedPreferences("file-operation-ui", 0).edit()
+                    .putString("dismissed_operation_id", fileOperationId).apply()
+                fileOperationDialogVisible = false
+            }
         )
     }
 }
