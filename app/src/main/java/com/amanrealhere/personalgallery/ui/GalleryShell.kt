@@ -69,6 +69,12 @@ fun GalleryShell(viewModel: GalleryViewModel) {
     val fileOperationWorkInfos by WorkManager.getInstance(context)
         .getWorkInfosByTagFlow(MediaFileOperationWorker.TAG)
         .collectAsStateWithLifecycle(initialValue = emptyList())
+    val fileOperationId by viewModel.fileOperationId.collectAsStateWithLifecycle()
+    var fileOperationDialogVisible by remember { mutableStateOf(false) }
+    LaunchedEffect(fileOperationId) {
+        if (fileOperationId != null) fileOperationDialogVisible = true
+    }
+    val selectedFileOperation = fileOperationWorkInfos.firstOrNull { it.id.toString() == fileOperationId }
     val activeFileOperation = fileOperationWorkInfos.firstOrNull { it.state == WorkInfo.State.RUNNING }
     val fileOperationProcessed = activeFileOperation?.progress?.getInt(MediaFileOperationWorker.KEY_PROCESSED, 0) ?: 0
     val fileOperationTotal = activeFileOperation?.progress?.getInt(MediaFileOperationWorker.KEY_TOTAL, 0) ?: 0
@@ -290,5 +296,11 @@ fun GalleryShell(viewModel: GalleryViewModel) {
                 }
             }
         }
+    }
+    if (fileOperationDialogVisible && selectedFileOperation != null) {
+        FileOperationDetailsDialog(
+            workInfo = selectedFileOperation,
+            onDismiss = { fileOperationDialogVisible = false }
+        )
     }
 }
