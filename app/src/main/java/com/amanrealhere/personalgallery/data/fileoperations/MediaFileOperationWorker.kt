@@ -216,14 +216,10 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
     }
 
     private fun publishNoReplace(temp: File, destination: File) {
-        // Unique names are selected before publishing. Recheck to avoid a normal-path collision.
+        // Do not use ATOMIC_MOVE here: its target-replacement behavior is provider-specific.
+        // The plain move is required to fail if a destination appeared after name selection.
         check(!destination.exists()) { "Destination collision before publish" }
-        try {
-            Files.move(temp.toPath(), destination.toPath(), StandardCopyOption.ATOMIC_MOVE)
-        } catch (_: AtomicMoveNotSupportedException) {
-            check(!destination.exists()) { "Destination collision before fallback publish" }
-            Files.move(temp.toPath(), destination.toPath())
-        }
+        Files.move(temp.toPath(), destination.toPath())
     }
 
     private fun uniqueDestination(directory: File, originalName: String): File {
@@ -278,7 +274,7 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
     private fun appendLog(file: File, text: String) {
         FileOutputStream(file, true).use { stream ->
             stream.write(text.toByteArray(Charsets.UTF_8))
-            stream.fd.sync()
+            stream.flush()
         }
     }
 
