@@ -416,7 +416,7 @@ class ThumbnailGenerationWorker(
             val modified = attributes.lastModifiedTime().toMillis()
             val current = latest
             if (current == null || modified > latestModified ||
-                (modified == latestModified && file.absolutePath < current.absolutePath)
+                (modified == latestModified && file.absolutePath > current.absolutePath)
             ) {
                 latest = file
                 latestModified = modified
