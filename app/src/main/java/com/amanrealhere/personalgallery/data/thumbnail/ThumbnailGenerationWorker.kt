@@ -387,6 +387,7 @@ class ThumbnailGenerationWorker(
     }
 
     private fun scanImages(folder: File): ImageScan {
+        if (GalleryStorage.isInternalGalleryPath(folder.path)) return ImageScan(0, null, false)
         if (!folder.isDirectory || !folder.canRead()) return ImageScan(0, null, false)
 
         var count = 0
