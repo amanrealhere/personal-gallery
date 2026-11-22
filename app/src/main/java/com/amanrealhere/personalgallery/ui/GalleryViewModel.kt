@@ -37,6 +37,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class GalleryViewModel(
     application: Application
@@ -55,12 +56,14 @@ class GalleryViewModel(
         if (uniqueSources.isEmpty()) return
         viewModelScope.launch {
             try {
-                val operationId = MediaFileOperationScheduler.enqueue(
-                    getApplication(),
-                    type,
-                    uniqueSources,
-                    destinationAlbum.canonicalPath
-                )
+                val operationId = withContext(Dispatchers.IO) {
+                    MediaFileOperationScheduler.enqueue(
+                        getApplication(),
+                        type,
+                        uniqueSources,
+                        destinationAlbum.canonicalPath
+                    )
+                }
                 val workManager = WorkManager.getInstance(getApplication<Application>())
                 val finishedWork = workManager.getWorkInfosByTagFlow(MediaFileOperationWorker.TAG)
                     .first { infos -> infos.any { it.id.toString() == operationId && it.state.isFinished } }
@@ -80,9 +83,11 @@ class GalleryViewModel(
                     }
                 }
                 val affectedAlbums = (sourceAlbums + destinationAlbum).distinctBy { it.id }
-                for (album in affectedAlbums) {
-                    mediaIndexRepository.reconcileAlbum(album.id, File(album.canonicalPath))
-                    ThumbnailWorkScheduler.enqueueAlbum(getApplication(), album.id, force = false)
+                withContext(Dispatchers.IO) {
+                    for (album in affectedAlbums) {
+                        mediaIndexRepository.reconcileAlbum(album.id, File(album.canonicalPath))
+                        ThumbnailWorkScheduler.enqueueAlbum(getApplication(), album.id, force = false)
+                    }
                 }
 
                 val verb = if (type == MediaFileOperationWorker.TYPE_MOVE) "Moved" else "Copied"
