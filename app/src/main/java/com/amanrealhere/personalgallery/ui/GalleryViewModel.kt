@@ -54,6 +54,10 @@ class GalleryViewModel(
     fun startFileOperation(type: String, sourcePaths: List<String>, destinationAlbum: Album) {
         val uniqueSources = sourcePaths.distinct()
         if (uniqueSources.isEmpty()) return
+        indexingJob?.cancel()
+        indexingJob = null
+        indexingAlbumId = null
+        _isIndexingAlbum.value = false
         viewModelScope.launch {
             try {
                 val operationId = withContext(Dispatchers.IO) {
