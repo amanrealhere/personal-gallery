@@ -48,6 +48,9 @@ class AlbumFolderValidator {
             val canonicalFolder = requestedFolder.canonicalFile
 
             when {
+                GalleryStorage.isInternalGalleryPath(canonicalFolder.path) ->
+                    FolderValidationResult.InvalidPath
+
                 !canonicalFolder.exists() ->
                     FolderValidationResult.DoesNotExist
 
