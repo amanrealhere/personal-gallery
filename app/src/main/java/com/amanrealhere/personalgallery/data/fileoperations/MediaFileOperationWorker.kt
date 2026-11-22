@@ -52,6 +52,7 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
         var failed = 0
         val errorSummary = mutableListOf<String>()
         appendLog(logFile, "=== $type operation $operationId ===\nDestination: ${destinationDirectory.canonicalPath}\nTotal sources: $total\n")
+        cleanupAbandonedTemps(destinationDirectory, logFile)
 
         setForeground(createForegroundInfo(type, operationId, 0, total, "Preparing", logFile))
         for (index in 0 until total) {
@@ -155,7 +156,11 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
         val originalSize = source.length()
         val originalModified = source.lastModified()
         if (source.parentFile?.canonicalPath == destinationDirectory.canonicalPath) {
-            appendLog(logFile, "[MOVE-NOOP] Source already in destination album: ${source.name}\n")
+            val namePass = source.name.isNotBlank()
+            val sizePass = source.length() == originalSize
+            val mtimePass = source.lastModified() / 1000L == originalModified / 1000L
+            appendLog(logFile, "[MOVE-NOOP-VERIFY] ${source.name} filename=$namePass size=$sizePass mtime(second)=$mtimePass (no filesystem change)\n")
+            check(namePass && sizePass && mtimePass) { "Same-album no-op verification failed" }
             return OperationOutcome(source)
         }
         var destination = uniqueDestination(destinationDirectory, source.name)
@@ -232,6 +237,24 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
             val candidate = File(directory, "$base ($index)$extension")
             if (!candidate.exists()) return candidate
             index++
+        }
+    }
+
+    private fun cleanupAbandonedTemps(destinationDirectory: File, logFile: File) {
+        val cutoff = System.currentTimeMillis() - TEMP_FILE_MAX_AGE_MS
+        val stale = destinationDirectory.listFiles()?.filter { file ->
+            file.isFile && file.name.startsWith(".personal-gallery-") && file.name.endsWith(".tmp") &&
+                file.lastModified() in 1L..cutoff
+        }.orEmpty()
+        for (file in stale) {
+            if (file.delete()) appendLog(logFile, "[CLEANUP] Removed abandoned temp file: ${file.name}\n")
+        }
+        val privateTemps = applicationContext.filesDir.listFiles()?.filter { file ->
+            file.isFile && file.name.startsWith("media-operation-") && file.name.endsWith(".tmp") &&
+                file.lastModified() in 1L..cutoff
+        }.orEmpty()
+        for (file in privateTemps) {
+            if (file.delete()) appendLog(logFile, "[CLEANUP] Removed stale private staging file: ${file.name}\n")
         }
     }
 
@@ -332,5 +355,6 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
         const val TYPE_MOVE = "MOVE"
         const val TAG = "personal-gallery-file-operation"
         private const val CHANNEL_ID = "personal-gallery-file-operations"
+        private const val TEMP_FILE_MAX_AGE_MS = 24L * 60L * 60L * 1000L
     }
 }
