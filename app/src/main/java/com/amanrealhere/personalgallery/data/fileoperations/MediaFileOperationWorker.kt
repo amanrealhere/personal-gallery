@@ -61,14 +61,15 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
             setProgress(progressData(processed, total, succeeded, failed, source.name, actionLabel, logFile))
             setForeground(createForegroundInfo(type, operationId, processed, total, "$actionLabel · ${source.name}", logFile))
             try {
-                val priorDestination = completed.optString(sourcePath).takeIf { it.isNotBlank() }?.let(::File)
-                if (priorDestination != null && isVerifiedDestination(source, priorDestination, type)) {
+                val priorEntry = completed.optJSONObject(sourcePath)
+                val priorDestination = priorEntry?.optString("destination")?.takeIf { it.isNotBlank() }?.let(::File)
+                if (priorEntry != null && priorDestination != null && isVerifiedDestination(source, priorDestination, priorEntry)) {
                     succeeded++
-                    appendLog(logFile, "[RESUME-SKIP] ${source.name}: previous destination still verifies at ${priorDestination.name}\n")
+                    appendLog(logFile, "[RESUME-SKIP] ${source.name}: prior destination verified at ${priorDestination.name}\\n")
                 } else {
-                    if (priorDestination != null) {
+                    if (priorEntry != null) {
                         completed.remove(sourcePath)
-                        appendLog(logFile, "[RESUME-RECHECK] ${source.name}: prior recorded destination no longer verifies; retrying\n")
+                        appendLog(logFile, "[RESUME-RECHECK] ${source.name}: recorded destination no longer verifies; retrying\\n")
                     }
                     val outcome = if (type == TYPE_MOVE) moveOne(source, destinationDirectory, logFile) else copyOne(source, destinationDirectory, logFile)
                     completed.put(sourcePath, JSONObject()
