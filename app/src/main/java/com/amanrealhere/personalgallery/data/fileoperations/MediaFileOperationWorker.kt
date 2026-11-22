@@ -64,6 +64,10 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
                 val priorEntry = completed.optJSONObject(sourcePath)
                 val priorDestination = priorEntry?.optString("destination")?.takeIf { it.isNotBlank() }?.let(::File)
                 if (priorEntry != null && priorDestination != null && isVerifiedDestination(source, priorDestination, priorEntry)) {
+                    if (type == TYPE_MOVE && source.exists()) {
+                        check(source.delete()) { "Previously verified Move destination exists, but source could not be deleted during recovery" }
+                        appendLog(logFile, "[RESUME-MOVE-DELETE] Removed source after re-verifying journaled destination: ${source.name}\n")
+                    }
                     succeeded++
                     appendLog(logFile, "[RESUME-SKIP] ${source.name}: prior destination verified at ${priorDestination.name}\n")
                 } else {
