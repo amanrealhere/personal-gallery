@@ -151,7 +151,7 @@ fun AlbumContentsScreen(
                             clipToPadding = true
                             setPadding(
                                 (18f * viewDensity).toInt(),
-                                if (sidebarExpanded) expandedGridTopPaddingPx(expandedHeaderHeightPx, rv.resources.displayMetrics.density) else 0,
+                                if (sidebarExpanded) expandedGridTopPaddingPx(expandedHeaderHeightPx, viewDensity) else 0,
                                 (18f * viewDensity).toInt(),
                                 (18f * viewDensity).toInt()
                             )
