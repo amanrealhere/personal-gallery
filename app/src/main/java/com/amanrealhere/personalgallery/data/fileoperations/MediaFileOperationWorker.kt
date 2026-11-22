@@ -128,7 +128,7 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
             check(tempSizePass && tempMtimePass) { "Temporary destination verification failed" }
 
             publishNoReplace(temporary, destination)
-            val namePass = destination.name == File(destinationDirectory, destination.name).name
+            val namePass = destination.name.isNotBlank() && destination.parentFile?.canonicalPath == destinationDirectory.canonicalPath
             val sizePass = destination.isFile && destination.length() == originalSize
             val mtimePass = destination.lastModified() / 1000L == originalModified / 1000L
             appendLog(logFile, "[VERIFY-PUBLISHED] filename=${destination.name} pass=$namePass size=$sizePass mtime(second)=$mtimePass\n")
@@ -153,7 +153,7 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
             // Atomic rename first, as requested. Never use Files.getFileStore().
             if (destination.exists()) destination = uniqueDestination(destinationDirectory, source.name)
             Files.move(source.toPath(), destination.toPath(), StandardCopyOption.ATOMIC_MOVE)
-            val namePass = destination.name == destination.name
+            val namePass = destination.name.isNotBlank() && destination.parentFile?.canonicalPath == destinationDirectory.canonicalPath
             val sizePass = destination.isFile && destination.length() == originalSize
             val mtimePass = destination.lastModified() / 1000L == originalModified / 1000L
             val sourceGonePass = !source.exists()
@@ -171,7 +171,7 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
         destination = uniqueDestination(destinationDirectory, source.name)
         val outcome = copyOne(source, destinationDirectory, logFile)
         val copied = outcome.destination
-        val namePass = copied.name == destination.name
+        val namePass = copied.name == destination.name && copied.parentFile?.canonicalPath == destinationDirectory.canonicalPath
         val sizePass = copied.isFile && copied.length() == originalSize
         val mtimePass = copied.lastModified() / 1000L == originalModified / 1000L
         appendLog(logFile, "[MOVE-FALLBACK-VERIFY] filename=${copied.name} pass=$namePass size=$sizePass mtime(second)=$mtimePass\n")
