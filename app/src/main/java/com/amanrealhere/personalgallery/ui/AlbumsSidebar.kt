@@ -1,8 +1,5 @@
 package com.amanrealhere.personalgallery.ui
 
-import androidx.compose.animation.Crossfade
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
@@ -18,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -32,6 +30,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -60,41 +59,38 @@ fun AlbumsSidebar(
     val thumbnailStatesByAlbumId = remember(thumbnailStates) {
         thumbnailStates.associateBy { it.albumId }
     }
+    val albumListState = rememberLazyListState()
 
     Surface(
         modifier = Modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.surfaceContainerLow
     ) {
-        Crossfade(
-            targetState = sidebarExpanded,
-            animationSpec = tween(durationMillis = 120, easing = FastOutSlowInEasing),
-            label = "sidebar content"
-        ) { expanded ->
-            if (expanded) {
-                ExpandedAlbumsSidebar(
-                    albums = albums,
-                    thumbnailStatesByAlbumId = thumbnailStatesByAlbumId,
-                    selectedAlbumPath = selectedAlbumPath,
-                    isAlbumsOverviewSelected = isAlbumsOverviewSelected,
-                    isAddAlbumSelected = isAddAlbumSelected,
-                    onToggleSidebar = onToggleSidebar,
-                    onAlbumsClick = onAlbumsClick,
-                    onAddAlbumClick = onAddAlbumClick,
-                    onAlbumClick = onAlbumClick
-                )
-            } else {
-                CollapsedAlbumsSidebar(
-                    albums = albums,
-                    thumbnailStatesByAlbumId = thumbnailStatesByAlbumId,
-                    selectedAlbumPath = selectedAlbumPath,
-                    isAlbumsOverviewSelected = isAlbumsOverviewSelected,
-                    isAddAlbumSelected = isAddAlbumSelected,
-                    onToggleSidebar = onToggleSidebar,
-                    onAlbumsClick = onAlbumsClick,
-                    onAddAlbumClick = onAddAlbumClick,
-                    onAlbumClick = onAlbumClick
-                )
-            }
+        if (sidebarExpanded) {
+            ExpandedAlbumsSidebar(
+                albums = albums,
+                thumbnailStatesByAlbumId = thumbnailStatesByAlbumId,
+                selectedAlbumPath = selectedAlbumPath,
+                isAlbumsOverviewSelected = isAlbumsOverviewSelected,
+                isAddAlbumSelected = isAddAlbumSelected,
+                onToggleSidebar = onToggleSidebar,
+                onAlbumsClick = onAlbumsClick,
+                onAddAlbumClick = onAddAlbumClick,
+                onAlbumClick = onAlbumClick,
+                listState = albumListState
+            )
+        } else {
+            CollapsedAlbumsSidebar(
+                albums = albums,
+                thumbnailStatesByAlbumId = thumbnailStatesByAlbumId,
+                selectedAlbumPath = selectedAlbumPath,
+                isAlbumsOverviewSelected = isAlbumsOverviewSelected,
+                isAddAlbumSelected = isAddAlbumSelected,
+                onToggleSidebar = onToggleSidebar,
+                onAlbumsClick = onAlbumsClick,
+                onAddAlbumClick = onAddAlbumClick,
+                onAlbumClick = onAlbumClick,
+                listState = albumListState
+            )
         }
     }
 }
@@ -109,7 +105,8 @@ private fun ExpandedAlbumsSidebar(
     onToggleSidebar: () -> Unit,
     onAlbumsClick: () -> Unit,
     onAddAlbumClick: () -> Unit,
-    onAlbumClick: (Album) -> Unit
+    onAlbumClick: (Album) -> Unit,
+    listState: LazyListState
 ) {
     Column(
         modifier = Modifier.fillMaxSize().padding(horizontal = 10.dp, vertical = 12.dp)
@@ -167,6 +164,7 @@ private fun ExpandedAlbumsSidebar(
         )
 
         LazyColumn(
+            state = listState,
             modifier = Modifier.weight(1f).fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
@@ -210,7 +208,8 @@ private fun CollapsedAlbumsSidebar(
     onToggleSidebar: () -> Unit,
     onAlbumsClick: () -> Unit,
     onAddAlbumClick: () -> Unit,
-    onAlbumClick: (Album) -> Unit
+    onAlbumClick: (Album) -> Unit,
+    listState: LazyListState
 ) {
     Column(
         modifier = Modifier.fillMaxSize().padding(top = 8.dp, bottom = 8.dp),
@@ -246,6 +245,7 @@ private fun CollapsedAlbumsSidebar(
 
         Spacer(Modifier.height(10.dp))
         LazyColumn(
+            state = listState,
             modifier = Modifier.fillMaxWidth().weight(1f),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(8.dp)

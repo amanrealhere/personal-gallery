@@ -105,9 +105,9 @@ fun AlbumContentsScreen(
         else -> "${imageCount} ${if (imageCount == 1) "image" else "images"}"
     }
 
-    // Header remains adapter position 0 at all times. It is GONE in expanded mode,
-    // keeping photo adapter positions stable while the expanded header is shown
-    // above the grid.
+    // The expanded header lives outside the grid and stays fixed while scrolling.
+    // The collapsed header is a RecyclerView item and scrolls with the photos.
+    // Switching adapters preserves the first visible photo and its vertical offset.
     val headerAdapter = remember(album.id) {
         CollapsedAlbumHeaderAdapter(
             albumName = album.name,
@@ -420,8 +420,8 @@ private class CollapsedAlbumHeaderAdapter(
         notifyItemChanged(0)
     }
 
-    // A permanent full-span header stabilizes all photo adapter positions across
-    // sidebar expand/collapse. The header itself is GONE when the overlay is used.
+    // This adapter is attached only while the sidebar is collapsed, so its
+    // header scrolls with the grid. Expanded mode uses the fixed Compose header.
     override fun getItemCount() = 1
 
     override fun onCreateViewHolder(parent: android.view.ViewGroup, viewType: Int): HeaderViewHolder {
