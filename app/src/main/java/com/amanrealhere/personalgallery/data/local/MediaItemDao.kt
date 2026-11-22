@@ -32,28 +32,6 @@ interface MediaItemDao {
     suspend fun applyChangedStagedItems(albumId: String, scanToken: String)
 
     @Query("""
-        INSERT OR REPLACE INTO media_items (
-            id, albumId, sourcePath, sourceCanonicalPath, displayName, fileSizeBytes, modifiedAtEpochMillis
-        )
-        SELECT s.id, s.albumId, s.sourcePath, s.sourceCanonicalPath, s.displayName, s.fileSizeBytes, s.modifiedAtEpochMillis
-        FROM media_item_staging s
-        WHERE s.albumId = :albumId AND s.scanToken = :scanToken AND s.id IN (:ids)
-          AND NOT EXISTS (
-              SELECT 1 FROM media_items m WHERE m.id = s.id
-                AND m.sourcePath = s.sourcePath AND m.sourceCanonicalPath = s.sourceCanonicalPath
-                AND m.displayName = s.displayName AND m.fileSizeBytes = s.fileSizeBytes
-                AND m.modifiedAtEpochMillis = s.modifiedAtEpochMillis
-          )
-    """)
-    suspend fun applyStagedBatch(albumId: String, scanToken: String, ids: List<String>)
-
-    @Transaction
-    suspend fun stageAndApplyBatch(albumId: String, scanToken: String, items: List<MediaItemStagingEntity>) {
-        insertStaging(items)
-        applyStagedBatch(albumId, scanToken, items.map { it.id })
-    }
-
-    @Query("""
         DELETE FROM media_items
         WHERE albumId = :albumId
           AND id NOT IN (
