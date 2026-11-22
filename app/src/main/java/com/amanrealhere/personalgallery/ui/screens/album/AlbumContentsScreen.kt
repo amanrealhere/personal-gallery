@@ -288,7 +288,7 @@ private fun expandedGridTopPaddingPx(headerHeightPx: Int, density: Float): Int {
     // The expanded header is pinned above the RecyclerView, while the hidden
     // ConcatAdapter header slot can still contribute layout space. Offset the
     // grid upward to avoid the oversized gap, but retain a small breathing room.
-    val reducedHeaderOffset = (72f * density).toInt()
+    val reducedHeaderOffset = (84f * density).toInt()
     val minimumGap = (24f * density).toInt()
     return (headerHeightPx - reducedHeaderOffset).coerceAtLeast(minimumGap)
 }
