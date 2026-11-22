@@ -25,6 +25,9 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.first
 import java.io.File
 import java.io.FileOutputStream
+import java.nio.file.Files
+import java.nio.file.LinkOption
+import java.nio.file.attribute.BasicFileAttributes
 import java.util.UUID
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -396,9 +399,20 @@ class ThumbnailGenerationWorker(
 
         for (file in walk) {
             if (isStopped) throw CancellationException("Cover scan stopped")
-            if (!file.isFile || file.extension.lowercase() !in SUPPORTED_EXTENSIONS) continue
+            if (file.extension.lowercase() !in SUPPORTED_EXTENSIONS) continue
+            val attributes = try {
+                Files.readAttributes(
+                    file.toPath(),
+                    BasicFileAttributes::class.java,
+                    LinkOption.NOFOLLOW_LINKS
+                )
+            } catch (_: Exception) {
+                complete = false
+                continue
+            }
+            if (attributes.isSymbolicLink || !attributes.isRegularFile) continue
             count++
-            val modified = file.lastModified()
+            val modified = attributes.lastModifiedTime().toMillis()
             val current = latest
             if (current == null || modified > latestModified ||
                 (modified == latestModified && file.absolutePath < current.absolutePath)
