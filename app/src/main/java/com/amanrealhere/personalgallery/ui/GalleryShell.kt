@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.work.WorkInfo
+import androidx.work.WorkManager
 import com.amanrealhere.personalgallery.data.storage.GalleryStorage
 import com.amanrealhere.personalgallery.data.fileoperations.MediaFileOperationWorker
 import com.amanrealhere.personalgallery.domain.model.Album

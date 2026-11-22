@@ -83,7 +83,7 @@ class GalleryViewModel(
                 // Refresh the registered albums affected by these paths, then update their covers.
                 val sourceAlbums = albums.value.filter { album ->
                     uniqueSources.any { path ->
-                        path.startsWith(album.canonicalPath.trimEnd(File.separator) + File.separator)
+                        path.startsWith(album.canonicalPath.trimEnd(File.separatorChar) + File.separator)
                     }
                 }
                 val affectedAlbums = (sourceAlbums + destinationAlbum).distinctBy { it.id }

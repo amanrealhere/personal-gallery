@@ -147,7 +147,7 @@ class MediaGridItemView(context: android.content.Context) : FrameLayout(context)
         background = GradientDrawable().apply {
             cornerRadius = dp(12).toFloat()
             setColor(0xFF202020.toInt())
-            setStroke(dp(if (selected) 2 else 1), if (selected) 0xFF90CAF9.toInt() else 0xFF353535.toInt()
+            setStroke(dp(if (selected) 2 else 1), if (selected) 0xFF90CAF9.toInt() else 0xFF353535.toInt())
         }
         isClickable = true
         isLongClickable = true
