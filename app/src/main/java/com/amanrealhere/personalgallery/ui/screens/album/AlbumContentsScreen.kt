@@ -11,6 +11,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.zIndex
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -96,6 +99,8 @@ fun AlbumContentsScreen(
 
     var minimumCellSizeDp by remember { mutableFloatStateOf(148f) }
     var recyclerView by remember { mutableStateOf<RecyclerView?>(null) }
+    var expandedHeaderHeightPx by remember(album.id) { mutableStateOf(0) }
+    val expandedMode = remember(album.id) { mutableStateOf(sidebarExpanded }
 
     // While scanning, report discoveries rather than presenting the previous catalogue total as current.
     val headerCountLabel = when {
@@ -105,26 +110,26 @@ fun AlbumContentsScreen(
         else -> "${imageCount} ${if (imageCount == 1) "image" else "images"}"
     }
 
-    // Keep the header as adapter position 0 in both sidebar modes. This keeps
-    // grid spans and photo adapter positions stable while the fixed expanded
-    // header is shown separately above the grid.
+    // Expanded mode uses the photo adapter alone; collapsed mode includes
+    // the header as a full-span first item.
     val headerAdapter = remember(album.id) {
         CollapsedAlbumHeaderAdapter(
             albumName = album.name,
             countLabel = headerCountLabel,
             isLoading = isLoading,
             progressMessage = progressMessage,
-            visible = !sidebarExpanded,
+            visible = true,
             onRegenerate = onRegenerate
         )
     }
     SideEffect {
+        expandedMode.value = sidebarExpanded
         headerAdapter.update(
             albumName = album.name,
             countLabel = headerCountLabel,
             isLoading = isLoading,
             progressMessage = progressMessage,
-            visible = !sidebarExpanded
+            visible = true
         )
     }
     val concatAdapter = remember(headerAdapter, pagingAdapter) {
@@ -144,30 +149,17 @@ fun AlbumContentsScreen(
 
 
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-        Column(Modifier.fillMaxSize()) {
-            if (sidebarExpanded) {
-                AlbumHeader(
-                    albumName = album.name,
-                    countLabel = headerCountLabel,
-                    isLoading = isLoading,
-                    progressMessage = progressMessage,
-                    collapsedStyle = false,
-                    onRegenerate = onRegenerate
-                )
-            }
-
-            Box(
-                modifier = if (sidebarExpanded) Modifier.weight(1f).fillMaxWidth() else Modifier.fillMaxSize()
-            ) {
-                AndroidView(
-                    modifier = Modifier.fillMaxSize(),
+        Box(Modifier.fillMaxSize().clipToBounds()) {
+            AndroidView(
+                modifier = Modifier.fillMaxSize().clipToBounds(),
                     factory = { viewContext ->
                         val viewDensity = viewContext.resources.displayMetrics.density
                         val rv = RecyclerView(viewContext).apply {
-                            clipToPadding = false
+                            clipChildren = true
+                            clipToPadding = true
                             setPadding(
                                 (18f * viewDensity).toInt(),
-                                0,
+                                if (sidebarExpanded) expandedHeaderHeightPx else 0,
                                 (18f * viewDensity).toInt(),
                                 (18f * viewDensity).toInt()
                             )
@@ -183,10 +175,11 @@ fun AlbumContentsScreen(
                             }
                             gridLayoutManager.spanSizeLookup = object : GridLayoutManager.SpanSizeLookup() {
                                 override fun getSpanSize(position: Int): Int =
-                                    if (position == 0) gridLayoutManager.spanCount else 1
+                                    if (!expandedMode.value && position == 0) gridLayoutManager.spanCount else 1
                             }
                             layoutManager = gridLayoutManager
-                            adapter = concatAdapter
+                            adapter = if (sidebarExpanded) pagingAdapter else concatAdapter
+                            tag = sidebarExpanded
                         }
 
                         val scaleDetector = ScaleGestureDetector(
@@ -228,7 +221,28 @@ fun AlbumContentsScreen(
                         rv
                     },
                     update = { rv ->
-                        if (rv.adapter !== concatAdapter) rv.adapter = concatAdapter
+                        val previousExpanded = (rv.tag as? Boolean) ?: sidebarExpanded
+                        if (previousExpanded != sidebarExpanded) {
+                            val anchor = captureGridScrollAnchor(rv)
+                            val translatedPosition = when {
+                                previousExpanded && !sidebarExpanded -> (anchor?.position ?: 0) + 1
+                                !previousExpanded && sidebarExpanded -> (anchor?.position ?: 0) - 1
+                                else -> anchor?.position ?: 0
+                            }.coerceAtLeast(0)
+                            rv.setPadding(
+                                (18f * rv.resources.displayMetrics.density).toInt(),
+                                if (sidebarExpanded) expandedHeaderHeightPx else 0,
+                                (18f * rv.resources.displayMetrics.density).toInt(),
+                                (18f * rv.resources.displayMetrics.density).toInt()
+                            )
+                            rv.adapter = if (sidebarExpanded) pagingAdapter else concatAdapter
+                            rv.tag = sidebarExpanded
+                            (rv.layoutManager as? GridLayoutManager)?.spanSizeLookup?.invalidateSpanIndexCache()
+                            (rv.layoutManager as? GridLayoutManager)?.scrollToPositionWithOffset(
+                                translatedPosition,
+                                anchor?.offsetFromPadding ?: 0
+                            )
+                        }
                         updateGridSpanCount(rv, rv.resources.displayMetrics.density, minimumCellSizeDp)
                     },
                     onRelease = { rv ->
@@ -236,6 +250,26 @@ fun AlbumContentsScreen(
                         if (recyclerView === rv) recyclerView = null
                     }
                 )
+
+                if (sidebarExpanded) {
+                    AlbumHeader(
+                        albumName = album.name,
+                        countLabel = headerCountLabel,
+                        isLoading = isLoading,
+                        progressMessage = progressMessage,
+                        collapsedStyle = true,
+                        onRegenerate = onRegenerate,
+                        modifier = Modifier.align(Alignment.TopCenter).zIndex(1f).onSizeChanged { size ->
+                            if (expandedHeaderHeightPx != size.height) {
+                                expandedHeaderHeightPx = size.height
+                                recyclerView?.let { rv ->
+                                    rv.setPadding(rv.paddingLeft, size.height, rv.paddingRight, rv.paddingBottom)
+                                    rv.requestLayout()
+                                }
+                            }
+                        }
+                    )
+                }
 
                 if (!hasItems && !isIndexing && loadState?.refresh !is androidx.paging.LoadState.Loading) {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -254,7 +288,6 @@ fun AlbumContentsScreen(
                     }
                 }
             }
-        }
     }
 
 }
@@ -319,9 +352,10 @@ private fun AlbumHeader(
     isLoading: Boolean,
     progressMessage: String?,
     collapsedStyle: Boolean,
-    onRegenerate: () -> Unit
+    onRegenerate: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    Surface(modifier = Modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.surfaceContainerLow) {
+    Surface(modifier = modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.surfaceContainerLow) {
         Column {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(

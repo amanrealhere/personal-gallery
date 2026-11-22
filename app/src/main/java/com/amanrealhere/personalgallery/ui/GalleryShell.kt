@@ -127,7 +127,7 @@ fun GalleryShell(viewModel: GalleryViewModel) {
     // Reconcile on album selection only; avoid restarting the scan on resume.
     val sidebarWidth by animateDpAsState(
         targetValue = if (sidebarExpanded) 280.dp else 76.dp,
-        animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing),
+        animationSpec = tween(durationMillis = 160, easing = FastOutSlowInEasing),
         label = "sidebar width"
     )
 
