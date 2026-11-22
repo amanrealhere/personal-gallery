@@ -82,7 +82,17 @@ class MediaIndexRepository(private val mediaItemDao: MediaItemDao) {
                                         // Directories must be discovered regardless of name;
                                         // supported image candidates receive full metadata reads.
                                         if (!isSupportedImageName(child.name)) {
-                                            if (Files.isDirectory(entry, LinkOption.NOFOLLOW_LINKS)) {
+                                            val attributes = try {
+                                                Files.readAttributes(
+                                                    entry,
+                                                    BasicFileAttributes::class.java,
+                                                    LinkOption.NOFOLLOW_LINKS
+                                                )
+                                            } catch (_: Exception) {
+                                                complete.set(false)
+                                                continue
+                                            }
+                                            if (!attributes.isSymbolicLink && attributes.isDirectory) {
                                                 activeDirectories.incrementAndGet()
                                                 if (directories.trySend(child).isFailure) {
                                                     activeDirectories.decrementAndGet()
