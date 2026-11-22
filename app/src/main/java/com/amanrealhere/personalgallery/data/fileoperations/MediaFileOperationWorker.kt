@@ -128,7 +128,7 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
             check(tempSizePass && tempMtimePass) { "Temporary destination verification failed" }
 
             publishNoReplace(temporary, destination)
-            val namePass = destination.name == destination.name // Target name is the selected destination name.
+            val namePass = destination.name == File(destinationDirectory, destination.name).name
             val sizePass = destination.isFile && destination.length() == originalSize
             val mtimePass = destination.lastModified() / 1000L == originalModified / 1000L
             appendLog(logFile, "[VERIFY-PUBLISHED] filename=${destination.name} pass=$namePass size=$sizePass mtime(second)=$mtimePass\n")
@@ -171,7 +171,7 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
         destination = uniqueDestination(destinationDirectory, source.name)
         val outcome = copyOne(source, destinationDirectory, logFile)
         val copied = outcome.destination
-        val namePass = copied.name == destination.name || copied.name == source.name || copied.name.startsWith(source.name.substringBeforeLast('.', source.name))
+        val namePass = copied.name == destination.name
         val sizePass = copied.isFile && copied.length() == originalSize
         val mtimePass = copied.lastModified() / 1000L == originalModified / 1000L
         appendLog(logFile, "[MOVE-FALLBACK-VERIFY] filename=${copied.name} pass=$namePass size=$sizePass mtime(second)=$mtimePass\n")
