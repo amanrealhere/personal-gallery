@@ -1,6 +1,7 @@
 package com.amanrealhere.personalgallery.ui.screens.album
 
 import android.view.ScaleGestureDetector
+import androidx.activity.compose.BackHandler
 import android.view.View
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.clickable
@@ -80,6 +81,7 @@ fun AlbumContentsScreen(
     var selectedPaths by remember(album.id) { mutableStateOf<Set<String>>(emptySet()) }
     var destinationPickerOpen by remember(album.id) { mutableStateOf(false) }
     var pendingOperationType by remember(album.id) { mutableStateOf("COPY") }
+    BackHandler(enabled = selectedPaths.isNotEmpty()) { selectedPaths = emptySet() }
 
     // Use a fresh PagingAdapter for each album to avoid carrying recycled cells
     // and adapter state across different PagingData generations.

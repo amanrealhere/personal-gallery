@@ -122,7 +122,7 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
             if (temporary.length() != originalSize || temporary.lastModified() != originalModified) {
                 throw IllegalStateException("Copied file verification failed")
             }
-            if (!temporary.renameTo(destination)) throw IllegalStateException("Could not publish copied file")
+            Files.move(temporary.toPath(), destination.toPath())
             if (destination.length() != originalSize || destination.lastModified() != originalModified) {
                 destination.delete()
                 throw IllegalStateException("Published file verification failed")
