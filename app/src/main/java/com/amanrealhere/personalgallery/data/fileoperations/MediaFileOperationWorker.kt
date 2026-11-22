@@ -272,7 +272,7 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
             .setSmallIcon(android.R.drawable.ic_menu_gallery)
             .setContentTitle(title)
             .setContentText(status)
-            .setStyle(NotificationCompat.BigTextStyle().bigText("$status\n$processed of $total items ($percent%)\nDetailed log: ${logFile.name}"))
+            .setStyle(NotificationCompat.BigTextStyle().bigText("$status\n$processed of $total items ($percent%)\nLatest log:\n${readLogTail(logFile, 1800)}"))
             .setProgress(total.coerceAtLeast(1), processed, total == 0)
             .setOngoing(true).setOnlyAlertOnce(true).setAutoCancel(false)
             .build()
@@ -286,24 +286,25 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
             .setSmallIcon(android.R.drawable.ic_menu_gallery)
             .setContentTitle(title)
             .setContentText(summary)
-            .setStyle(NotificationCompat.BigTextStyle().bigText("$summary\nDetailed log stored at: ${logFile.absolutePath}"))
+            .setStyle(NotificationCompat.BigTextStyle().bigText("$summary\nDetailed log: ${logFile.absolutePath}\nLatest per-file results:\n${readLogTail(logFile, 2600)}"))
             .setAutoCancel(false).setOngoing(true).setOnlyAlertOnce(true).build()
         applicationContext.getSystemService(NotificationManager::class.java)
             .notify(notificationId(operationId), notification)
     }
 
-    private fun readLogTail(file: File, maxBytes: Int): String = try {
-        if (!file.isFile) return "Log is not available yet"
-        RandomAccessFile(file, "r").use { reader ->
-            val start = (reader.length() - maxBytes.toLong()).coerceAtLeast(0L)
-            reader.seek(start)
-            if (start > 0L) reader.readLine()
-            val buffer = ByteArray((reader.length() - reader.filePointer).toInt())
-            reader.readFully(buffer)
-            String(buffer, Charsets.UTF_8)
+    private fun readLogTail(file: File, maxBytes: Int): String {
+        return try {
+            if (!file.isFile) "Log is not available yet" else RandomAccessFile(file, "r").use { reader ->
+                val start = (reader.length() - maxBytes.toLong()).coerceAtLeast(0L)
+                reader.seek(start)
+                if (start > 0L) reader.readLine()
+                val buffer = ByteArray((reader.length() - reader.filePointer).toInt())
+                reader.readFully(buffer)
+                String(buffer, Charsets.UTF_8)
+            }
+        } catch (e: Exception) {
+            "Could not read log excerpt: ${e.message}"
         }
-    } catch (e: Exception) {
-        "Could not read log excerpt: ${e.message}"
     }
 
     private fun notificationId(operationId: String): Int = (operationId.hashCode() and 0x7fffffff).coerceAtLeast(1)
