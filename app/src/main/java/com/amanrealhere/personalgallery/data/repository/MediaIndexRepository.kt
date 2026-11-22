@@ -20,6 +20,9 @@ import java.nio.file.attribute.BasicFileAttributes
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.ConcurrentHashMap
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /**
  * Builds a Room catalogue for a registered album.
@@ -33,10 +36,22 @@ import java.util.concurrent.atomic.AtomicInteger
  * only when every directory and candidate metadata read completed successfully.
  */
 class MediaIndexRepository(private val mediaItemDao: MediaItemDao) {
+    // Serialize catalogue reconciliation per album so an older overlapping scan cannot
+    // commit after a newer scan and overwrite its catalogue.
+    private val albumScanLocks = ConcurrentHashMap<String, Mutex>()
+
     suspend fun reconcileAlbum(
         albumId: String,
         folder: File,
         onProgress: (Int) -> Unit = {}
+    ): ScanResult = albumScanLocks.computeIfAbsent(albumId) { Mutex() }.withLock {
+        reconcileAlbumInternal(albumId, folder, onProgress)
+    }
+
+    private suspend fun reconcileAlbumInternal(
+        albumId: String,
+        folder: File,
+        onProgress: (Int) -> Unit
     ): ScanResult {
         val scanToken = UUID.randomUUID().toString()
         mediaItemDao.clearStaging(scanToken)
