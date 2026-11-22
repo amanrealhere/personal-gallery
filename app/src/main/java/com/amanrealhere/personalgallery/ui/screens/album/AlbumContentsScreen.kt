@@ -100,7 +100,7 @@ fun AlbumContentsScreen(
     var minimumCellSizeDp by remember { mutableFloatStateOf(148f) }
     var recyclerView by remember { mutableStateOf<RecyclerView?>(null) }
     var expandedHeaderHeightPx by remember(album.id) { mutableStateOf(0) }
-    val expandedMode = remember(album.id) { mutableStateOf(sidebarExpanded }
+    val expandedMode = remember(album.id) { mutableStateOf(sidebarExpanded) }
 
     // While scanning, report discoveries rather than presenting the previous catalogue total as current.
     val headerCountLabel = when {
