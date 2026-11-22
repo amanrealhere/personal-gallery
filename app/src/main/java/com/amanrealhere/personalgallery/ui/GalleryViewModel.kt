@@ -51,6 +51,9 @@ class GalleryViewModel(
     private val _fileOperationMessages = MutableSharedFlow<String>(extraBufferCapacity = 4)
     val fileOperationMessages = _fileOperationMessages.asSharedFlow()
 
+    private val _fileOperationId = MutableStateFlow<String?>(null)
+    val fileOperationId: StateFlow<String?> = _fileOperationId.asStateFlow()
+
     fun startFileOperation(type: String, sourcePaths: List<String>, destinationAlbum: Album) {
         val uniqueSources = sourcePaths.distinct()
         if (uniqueSources.isEmpty()) return
@@ -68,6 +71,7 @@ class GalleryViewModel(
                         destinationAlbum.canonicalPath
                     )
                 }
+                _fileOperationId.value = operationId
                 val workManager = WorkManager.getInstance(getApplication<Application>())
                 val finishedWork = workManager.getWorkInfosByTagFlow(MediaFileOperationWorker.TAG)
                     .first { infos -> infos.any { it.id.toString() == operationId && it.state.isFinished } }
