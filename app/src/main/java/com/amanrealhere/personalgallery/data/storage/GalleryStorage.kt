@@ -46,7 +46,7 @@ class GalleryStorage(context: Context) {
                 val rootPath = internalRoot.canonicalPath
                 val candidatePath = File(path).canonicalPath
                 candidatePath == rootPath || candidatePath.startsWith(rootPath + File.separator)
-            } catch (_: IOException) {
+            } catch (_: Exception) {
                 val rootPath = internalRoot.absolutePath
                 val candidatePath = File(path).absolutePath
                 candidatePath == rootPath || candidatePath.startsWith(rootPath + File.separator)
