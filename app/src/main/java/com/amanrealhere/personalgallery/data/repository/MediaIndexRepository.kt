@@ -9,15 +9,18 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.nio.file.Files
+import java.nio.file.LinkOption
 import java.nio.file.attribute.BasicFileAttributes
 import java.util.UUID
 
 /**
- * Reconciles the filesystem with the Room media catalogue.
+ * Reconciles a registered album with the Room media catalogue.
  *
- * The scan is staged outside the live media_items table so Paging isn't invalidated
- * for every batch. Only changed rows are applied in one final transaction. Missing
- * rows are deleted only after a complete scan.
+ * The filesystem walk streams directory entries instead of materializing a File[]
+ * for each directory. Metadata is read only for supported image candidates.
+ * All discovered items are staged in batches; catalogue reconciliation is done
+ * once after the scan, avoiding repeated SQL comparison work per batch.
+ * Missing catalogue rows are removed only after a complete scan.
  */
 class MediaIndexRepository(private val mediaItemDao: MediaItemDao) {
     suspend fun reconcileAlbum(
@@ -39,58 +42,74 @@ class MediaIndexRepository(private val mediaItemDao: MediaItemDao) {
             while (pendingDirectories.isNotEmpty()) {
                 currentCoroutineContext().ensureActive()
                 val directory = pendingDirectories.removeLast()
-                if (!directory.canRead()) {
-                    complete = false
-                    continue
-                }
                 val children = try {
-                    directory.listFiles()
-                } catch (_: SecurityException) {
-                    null
-                }
-                if (children == null) {
+                    Files.newDirectoryStream(directory.toPath())
+                } catch (_: Exception) {
                     complete = false
                     continue
                 }
-                for (child in children) {
-                    currentCoroutineContext().ensureActive()
-                    // Read each entry's attributes once. This avoids separate isSymlink,
-                    // isDirectory, isFile, canonicalPath, length and lastModified calls.
-                    val attributes = try {
-                        Files.readAttributes(child.toPath(), BasicFileAttributes::class.java)
+
+                children.use { entries ->
+                    try {
+                        for (entry in entries) {
+                            currentCoroutineContext().ensureActive()
+                            val child = entry.toFile()
+                            val path = entry
+                            // Avoid metadata reads for ordinary non-image files. Directories
+                            // still need to be identified so recursive traversal stays complete.
+                            if (!isSupportedImageName(child.name)) {
+                                if (Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS) &&
+                                    child.name != ".personal-gallery"
+                                ) {
+                                    pendingDirectories.add(child)
+                                }
+                                continue
+                            }
+
+                            val attributes = try {
+                                Files.readAttributes(
+                                    path,
+                                    BasicFileAttributes::class.java,
+                                    LinkOption.NOFOLLOW_LINKS
+                                )
+                            } catch (_: Exception) {
+                                complete = false
+                                continue
+                            }
+                            if (attributes.isSymbolicLink) continue
+                            if (attributes.isDirectory) {
+                                if (child.name != ".personal-gallery") pendingDirectories.add(child)
+                            } else if (attributes.isRegularFile) {
+                                // The registered album root is canonical and symlinks are skipped,
+                                // so the absolute child path is a stable identity without realpath().
+                                val absolutePath = child.absolutePath
+                                batch += MediaItemStagingEntity(
+                                    scanToken = scanToken,
+                                    id = "$albumId:$absolutePath",
+                                    albumId = albumId,
+                                    sourcePath = absolutePath,
+                                    sourceCanonicalPath = absolutePath,
+                                    displayName = child.name,
+                                    fileSizeBytes = attributes.size(),
+                                    modifiedAtEpochMillis = attributes.lastModifiedTime().toMillis()
+                                )
+                                indexed++
+                                if (indexed == 1 || indexed % PROGRESS_INTERVAL == 0) onProgress(indexed)
+                                if (batch.size >= BATCH_SIZE) {
+                                    mediaItemDao.insertStaging(batch)
+                                    batch.clear()
+                                }
+                            }
+                        }
                     } catch (_: Exception) {
                         complete = false
-                        continue
-                    }
-                    if (attributes.isSymbolicLink) continue
-                    if (attributes.isDirectory) {
-                        if (child.name != ".personal-gallery") pendingDirectories.add(child)
-                    } else if (attributes.isRegularFile && child.extension.lowercase() in SUPPORTED_EXTENSIONS) {
-                        // The registered album root is canonical and symlinks are skipped,
-                        // so the absolute child path is a stable identity without realpath().
-                        val absolutePath = child.absolutePath
-                        batch += MediaItemStagingEntity(
-                            scanToken = scanToken,
-                            id = "$albumId:$absolutePath",
-                            albumId = albumId,
-                            sourcePath = absolutePath,
-                            sourceCanonicalPath = absolutePath,
-                            displayName = child.name,
-                            fileSizeBytes = attributes.size(),
-                            modifiedAtEpochMillis = attributes.lastModifiedTime().toMillis()
-                        )
-                        indexed++
-                        if (indexed == 1 || indexed % PROGRESS_INTERVAL == 0) onProgress(indexed)
-                        val batchLimit = if (indexed <= INITIAL_BATCH_SIZE) INITIAL_BATCH_SIZE else BATCH_SIZE
-                        if (batch.size >= batchLimit) {
-                            mediaItemDao.stageAndApplyBatch(albumId, scanToken, batch)
-                            batch.clear()
-                        }
                     }
                 }
             }
             if (batch.isNotEmpty()) mediaItemDao.insertStaging(batch)
             onProgress(indexed)
+            // Apply all staged rows in one set-based reconciliation, not once per
+            // batch. This avoids repeating the existing-row comparisons hundreds of times.
             mediaItemDao.finishStagedScan(albumId, scanToken, complete)
             finalized = true
             return ScanResult.Completed(indexed, complete)
@@ -101,16 +120,20 @@ class MediaIndexRepository(private val mediaItemDao: MediaItemDao) {
         }
     }
 
+    private fun isSupportedImageName(name: String): Boolean =
+        name.endsWith(".jpg", ignoreCase = true) ||
+            name.endsWith(".jpeg", ignoreCase = true) ||
+            name.endsWith(".png", ignoreCase = true) ||
+            name.endsWith(".webp", ignoreCase = true)
+
     sealed interface ScanResult {
         data object Unavailable : ScanResult
         data class Completed(val indexedCount: Int, val complete: Boolean) : ScanResult
     }
 
     companion object {
-        private const val INITIAL_BATCH_SIZE = 64
         private const val BATCH_SIZE = 512
         // Keep UI/StateFlow progress traffic low while indexing large albums.
         private const val PROGRESS_INTERVAL = 256
-        private val SUPPORTED_EXTENSIONS = setOf("jpg", "jpeg", "png", "webp")
     }
 }
