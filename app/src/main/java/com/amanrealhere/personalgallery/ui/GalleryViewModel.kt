@@ -84,17 +84,30 @@ class GalleryViewModel(
                 val errorMessage = output.getString(MediaFileOperationWorker.KEY_ERROR)
                 val firstItemError = errors.lineSequence().firstOrNull()?.trim()
 
-                // Refresh the registered albums affected by these paths, then update their covers.
+                // Refresh is a separate phase: a completed filesystem operation must not
+                // be reported as failed merely because catalogue reconciliation fails.
                 val sourceAlbums = albums.value.filter { album ->
                     uniqueSources.any { path ->
                         path.startsWith(album.canonicalPath.trimEnd(File.separatorChar) + File.separator)
                     }
                 }
                 val affectedAlbums = (sourceAlbums + destinationAlbum).distinctBy { it.id }
+                val refreshFailures = mutableListOf<String>()
                 withContext(Dispatchers.IO) {
                     for (album in affectedAlbums) {
-                        mediaIndexRepository.reconcileAlbum(album.id, File(album.canonicalPath))
-                        ThumbnailWorkScheduler.enqueueAlbum(getApplication(), album.id, force = false)
+                        try {
+                            val scan = mediaIndexRepository.reconcileAlbum(album.id, File(album.canonicalPath))
+                            if (scan is MediaIndexRepository.ScanResult.Unavailable) {
+                                refreshFailures += "${album.name}: scan unavailable"
+                            } else if (scan is MediaIndexRepository.ScanResult.Completed && !scan.complete) {
+                                refreshFailures += "${album.name}: partial scan"
+                            }
+                            ThumbnailWorkScheduler.enqueueAlbum(getApplication(), album.id, force = false)
+                        } catch (refreshException: CancellationException) {
+                            throw refreshException
+                        } catch (refreshException: Exception) {
+                            refreshFailures += "${album.name}: ${refreshException.message ?: "refresh error"}"
+                        }
                     }
                 }
 
@@ -108,7 +121,9 @@ class GalleryViewModel(
                 } else {
                     "$verb ${succeeded} of ${uniqueSources.size}; ${failed} failed"
                 }
-                _fileOperationMessages.emit(message)
+                val finalMessage = if (refreshFailures.isEmpty()) message else
+                    "$message · Refresh needs attention: ${refreshFailures.joinToString("; ")}"
+                _fileOperationMessages.emit(finalMessage)
             } catch (exception: CancellationException) {
                 throw exception
             } catch (exception: Exception) {
