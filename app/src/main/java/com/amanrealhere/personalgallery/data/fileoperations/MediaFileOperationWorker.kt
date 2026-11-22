@@ -65,11 +65,11 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
                 val priorDestination = priorEntry?.optString("destination")?.takeIf { it.isNotBlank() }?.let(::File)
                 if (priorEntry != null && priorDestination != null && isVerifiedDestination(source, priorDestination, priorEntry)) {
                     succeeded++
-                    appendLog(logFile, "[RESUME-SKIP] ${source.name}: prior destination verified at ${priorDestination.name}\\n")
+                    appendLog(logFile, "[RESUME-SKIP] ${source.name}: prior destination verified at ${priorDestination.name}\n")
                 } else {
                     if (priorEntry != null) {
                         completed.remove(sourcePath)
-                        appendLog(logFile, "[RESUME-RECHECK] ${source.name}: recorded destination no longer verifies; retrying\\n")
+                        appendLog(logFile, "[RESUME-RECHECK] ${source.name}: recorded destination no longer verifies; retrying\n")
                     }
                     val outcome = if (type == TYPE_MOVE) moveOne(source, destinationDirectory, logFile) else copyOne(source, destinationDirectory, logFile)
                     completed.put(sourcePath, JSONObject()
