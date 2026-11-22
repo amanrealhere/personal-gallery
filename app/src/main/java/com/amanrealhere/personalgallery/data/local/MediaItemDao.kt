@@ -65,7 +65,7 @@ interface MediaItemDao {
 
     @Query("""
         SELECT * FROM media_items WHERE albumId = :albumId
-        ORDER BY modifiedAtEpochMillis DESC, sourcePath ASC LIMIT 1
+        ORDER BY modifiedAtEpochMillis DESC, sourcePath DESC LIMIT 1
     """)
     suspend fun latestItemForAlbum(albumId: String): MediaItemEntity?
 
