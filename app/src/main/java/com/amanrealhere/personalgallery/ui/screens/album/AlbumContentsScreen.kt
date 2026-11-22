@@ -110,8 +110,8 @@ fun AlbumContentsScreen(
         else -> "${imageCount} ${if (imageCount == 1) "image" else "images"}"
     }
 
-    // Expanded mode uses the photo adapter alone; collapsed mode includes
-    // the header as a full-span first item.
+    // Keep one stable adapter composition in both sidebar modes: the header slot
+    // remains at position 0 and photos always start at position 1.
     val headerAdapter = remember(album.id) {
         CollapsedAlbumHeaderAdapter(
             albumName = album.name,
