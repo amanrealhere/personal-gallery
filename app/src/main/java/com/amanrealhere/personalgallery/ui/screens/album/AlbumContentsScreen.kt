@@ -223,7 +223,7 @@ fun AlbumContentsScreen(
                             // padding and header visibility change, so photo positions never shift.
                             rv.setPadding(
                                 (18f * rv.resources.displayMetrics.density).toInt(),
-                                if (sidebarExpanded) expandedGridTopPaddingPx(expandedHeaderHeightPx, viewDensity) else 0,
+                                if (sidebarExpanded) expandedGridTopPaddingPx(expandedHeaderHeightPx, rv.resources.displayMetrics.density) else 0,
                                 (18f * rv.resources.displayMetrics.density).toInt(),
                                 (18f * rv.resources.displayMetrics.density).toInt()
                             )
