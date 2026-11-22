@@ -52,8 +52,14 @@ fun FileOperationDetailsDialog(
         logText = if (logPath == null) "Log path not available yet." else withContext(Dispatchers.IO) {
             try {
                 val file = File(logPath)
-                if (!file.isFile) "Operation log is being created…" else
-                    file.readLines().takeLast(120).joinToString("\n").takeLast(16000)
+                if (!file.isFile) "Operation log is being created…" else RandomAccessFile(file, "r").use { reader ->
+                    val startOffset = (reader.length() - 16_000L).coerceAtLeast(0L)
+                    reader.seek(startOffset)
+                    if (startOffset > 0L) reader.readLine()
+                    val bytes = ByteArray((reader.length() - reader.filePointer).toInt())
+                    reader.readFully(bytes)
+                    String(bytes, Charsets.UTF_8)
+                }
             } catch (e: Exception) {
                 "Could not read operation log: ${e.message}"
             }
