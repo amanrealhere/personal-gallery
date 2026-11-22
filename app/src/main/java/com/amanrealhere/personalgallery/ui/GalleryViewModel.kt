@@ -70,9 +70,8 @@ class GalleryViewModel(
                 val succeeded = output.getInt(MediaFileOperationWorker.KEY_SUCCEEDED, 0)
                 val failed = output.getInt(MediaFileOperationWorker.KEY_FAILED, uniqueSources.size)
                 val errors = output.getString(MediaFileOperationWorker.KEY_ERRORS).orEmpty()
-                val summary = output.getString(MediaFileOperationWorker.KEY_SUMMARY)
-                    ?: output.getString(MediaFileOperationWorker.KEY_ERROR)
-                    ?: "${succeeded} completed, ${failed} failed"
+                val errorMessage = output.getString(MediaFileOperationWorker.KEY_ERROR)
+                val firstItemError = errors.lineSequence().firstOrNull()?.trim()
 
                 // Refresh the registered albums affected by these paths, then update their covers.
                 val sourceAlbums = albums.value.filter { album ->
@@ -89,8 +88,12 @@ class GalleryViewModel(
                 val verb = if (type == MediaFileOperationWorker.TYPE_MOVE) "Moved" else "Copied"
                 val message = if (failed == 0 && succeeded > 0) {
                     "$verb ${succeeded} item${if (succeeded == 1) "" else "s"} to ${destinationAlbum.name}"
+                } else if (succeeded == 0 && errorMessage != null) {
+                    "$verb failed: $errorMessage"
+                } else if (succeeded == 0 && firstItemError != null) {
+                    "$verb failed: $firstItemError"
                 } else {
-                    "$verb ${succeeded}; ${failed} failed"
+                    "$verb ${succeeded} of ${uniqueSources.size}; ${failed} failed"
                 }
                 _fileOperationMessages.emit(message)
             } catch (exception: CancellationException) {

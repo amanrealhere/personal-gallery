@@ -99,6 +99,7 @@ class MediaGridItemView(context: android.content.Context) : FrameLayout(context)
         }
         addView(selectedScrim, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         checkBadge.apply {
+            visibility = View.GONE
             text = ""
             textSize = 14f
             gravity = android.view.Gravity.CENTER
