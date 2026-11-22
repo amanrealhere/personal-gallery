@@ -143,7 +143,7 @@ fun AlbumContentsScreen(
         Box(Modifier.fillMaxSize().clipToBounds()) {
             key(album.id) {
                 AndroidView(
-                modifier = Modifier.fillMaxSize().clipToBounds(),
+                    modifier = Modifier.fillMaxSize().clipToBounds(),
                     factory = { viewContext ->
                         val viewDensity = viewContext.resources.displayMetrics.density
                         val rv = RecyclerView(viewContext).apply {
