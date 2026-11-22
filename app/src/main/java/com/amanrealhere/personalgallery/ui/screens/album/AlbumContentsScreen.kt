@@ -32,8 +32,8 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.key
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -139,14 +139,6 @@ fun AlbumContentsScreen(
         images.collectLatest { pagingData -> pagingAdapter.submitData(pagingData) }
     }
 
-    LaunchedEffect(album.id) {
-        recyclerView?.post {
-            recyclerView?.stopScroll()
-            (recyclerView?.layoutManager as? GridLayoutManager)?.scrollToPosition(0)
-        }
-    }
-
-
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Box(Modifier.fillMaxSize().clipToBounds()) {
             key(album.id) {
@@ -215,6 +207,10 @@ fun AlbumContentsScreen(
                         }
                         recyclerView = rv
                         rv.post {
+                            // A newly keyed RecyclerView belongs to one album only.
+                            // Start at the stable header slot, then request the first photo.
+                            rv.stopScroll()
+                            rv.scrollToPosition(0)
                             if (pagingAdapter.itemCount > 0) pagingAdapter.requestLoad(0)
                             rv.requestLayout()
                         }
