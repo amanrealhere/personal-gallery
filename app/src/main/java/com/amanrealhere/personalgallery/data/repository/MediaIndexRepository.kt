@@ -2,6 +2,7 @@ package com.amanrealhere.personalgallery.data.repository
 
 import com.amanrealhere.personalgallery.data.local.MediaItemDao
 import com.amanrealhere.personalgallery.data.local.MediaItemStagingEntity
+import com.amanrealhere.personalgallery.data.storage.GalleryStorage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.async
@@ -39,6 +40,7 @@ class MediaIndexRepository(private val mediaItemDao: MediaItemDao) {
     ): ScanResult {
         val scanToken = UUID.randomUUID().toString()
         mediaItemDao.clearStaging(scanToken)
+        if (GalleryStorage.isInternalGalleryPath(folder.path)) return ScanResult.Unavailable
         if (!folder.isDirectory || !folder.canRead()) return ScanResult.Unavailable
 
         val complete = AtomicBoolean(true)
