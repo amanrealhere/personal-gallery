@@ -17,6 +17,7 @@ import org.json.JSONObject
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
+import java.io.RandomAccessFile
 import java.nio.file.Files
 import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.StandardCopyOption
@@ -289,6 +290,20 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
             .setAutoCancel(false).setOngoing(true).setOnlyAlertOnce(true).build()
         applicationContext.getSystemService(NotificationManager::class.java)
             .notify(notificationId(operationId), notification)
+    }
+
+    private fun readLogTail(file: File, maxBytes: Int): String = try {
+        if (!file.isFile) return "Log is not available yet"
+        RandomAccessFile(file, "r").use { reader ->
+            val start = (reader.length() - maxBytes.toLong()).coerceAtLeast(0L)
+            reader.seek(start)
+            if (start > 0L) reader.readLine()
+            val buffer = ByteArray((reader.length() - reader.filePointer).toInt())
+            reader.readFully(buffer)
+            String(buffer, Charsets.UTF_8)
+        }
+    } catch (e: Exception) {
+        "Could not read log excerpt: ${e.message}"
     }
 
     private fun notificationId(operationId: String): Int = (operationId.hashCode() and 0x7fffffff).coerceAtLeast(1)
