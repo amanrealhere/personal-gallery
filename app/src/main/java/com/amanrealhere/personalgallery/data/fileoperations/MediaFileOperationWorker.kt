@@ -71,7 +71,11 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
                         appendLog(logFile, "[RESUME-RECHECK] ${source.name}: prior recorded destination no longer verifies; retrying\n")
                     }
                     val outcome = if (type == TYPE_MOVE) moveOne(source, destinationDirectory, logFile) else copyOne(source, destinationDirectory, logFile)
-                    completed.put(sourcePath, outcome.destination.absolutePath)
+                    completed.put(sourcePath, JSONObject()
+                        .put("destination", outcome.destination.absolutePath)
+                        .put("name", outcome.destination.name)
+                        .put("size", outcome.destination.length())
+                        .put("mtimeSecond", outcome.destination.lastModified() / 1000L))
                     writeJournal(journalFile, journal)
                     succeeded++
                 }
@@ -185,12 +189,18 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
         return OperationOutcome(copied)
     }
 
-    private fun isVerifiedDestination(source: File, destination: File, type: String): Boolean {
+    private fun isVerifiedDestination(source: File, destination: File, entry: JSONObject): Boolean {
         if (!destination.isFile) return false
-        if (type == TYPE_MOVE && !source.exists()) return true
-        if (!source.isFile) return false
-        return destination.name.isNotBlank() && destination.length() == source.length() &&
-            destination.lastModified() / 1000L == source.lastModified() / 1000L
+        val recordedName = entry.optString("name")
+        val recordedSize = entry.optLong("size", -1L)
+        val recordedMtimeSecond = entry.optLong("mtimeSecond", -1L)
+        if (recordedName.isBlank() || recordedSize < 0L || recordedMtimeSecond < 0L) return false
+        val destinationPass = destination.name == recordedName &&
+            destination.length() == recordedSize &&
+            destination.lastModified() / 1000L == recordedMtimeSecond
+        if (!destinationPass) return false
+        return !source.exists() || (source.isFile && source.length() == recordedSize &&
+            source.lastModified() / 1000L == recordedMtimeSecond)
     }
 
     private fun publishNoReplace(temp: File, destination: File) {
