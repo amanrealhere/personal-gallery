@@ -423,7 +423,7 @@ fun GalleryShell(viewModel: GalleryViewModel) {
                     LaunchedEffect(workState, startTime, operationDurationMs) {
                         if (operationFinished) {
                             frozenElapsed = if (operationDurationMs >= 0L) operationDurationMs
-                                else if (startTime > 0L) (System.currentTimeMillis() - startTime).coerceAtLeast(0L) else 0L
+                                else if (startTime > 0L) (SystemClock.elapsedRealtime() - startTime).coerceAtLeast(0L) else 0L
                         } else if (operationRunning) {
                             frozenElapsed = null
                             while (true) {
