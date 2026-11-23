@@ -215,7 +215,8 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
                     } else {
                         log("RECOVERY", "Verified published destination from an interrupted Copy; source remains untouched")
                     }
-                    markCompleted(sourcePath, destination, expectedSize, expectedMtimeSeconds, "recovered")
+                    val recoveryMethod = plan.optString("method", if (type == TYPE_MOVE) "atomic-rename" else "copy")
+                    markCompleted(sourcePath, destination, expectedSize, expectedMtimeSeconds, recoveryMethod)
                     succeeded++
                     processed++
                     publishProgress(processed, total, succeeded, failed, source.name, "Recovered completed file")
@@ -243,7 +244,7 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
                 }
                 if (result) {
                     val finalDestination = File(plan.getString("destination"))
-                    markCompleted(sourcePath, finalDestination, expectedSize, expectedMtimeSeconds, "verified")
+                    markCompleted(sourcePath, finalDestination, expectedSize, expectedMtimeSeconds, plan.optString("method", if (type == TYPE_MOVE) "unknown-move" else "copy"))
                     succeeded++
                     log("SUCCESS", "$action completed: ${source.name} → ${finalDestination.name}")
                 } else {
@@ -324,8 +325,13 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
         }
 
         val reconciliationSuffix = if (reconciliationFailures == 0) "" else " · $reconciliationFailures album refresh failure(s)"
-        val verificationSummary = "$succeeded file(s) passed filename, size, and mtime-to-seconds verification"
-        val summary = "$succeeded succeeded, $failed failed, $processed of $total processed · $verificationSummary$reconciliationSuffix"
+        val methodCounts = (0 until completed.length()).map { completed.getJSONObject(completed.keys().asSequence().toList()[it]).optString("method") }
+        val copyCount = methodCounts.count { it == "copy" }
+        val atomicMoveCount = methodCounts.count { it == "atomic-rename" }
+        val fallbackMoveCount = methodCounts.count { it == "copy-delete" }
+        val methodSummary = if (type == TYPE_MOVE) "$atomicMoveCount atomic rename(s) · $fallbackMoveCount copy-and-delete move(s)" else "$copyCount copied"
+        val verificationSummary = "$succeeded file(s) verified (name, size, mtime-to-seconds)"
+        val summary = "$succeeded succeeded, $failed failed, $processed of $total processed · $methodSummary · $verificationSummary$reconciliationSuffix"
         log("SUMMARY", summary)
         if (reconciliationFailures > 0) {
             val reconciliationAttempt = operationState.optInt("reconciliationAttempts", 0) + 1
@@ -375,6 +381,9 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
         if (!source.isFile || !source.canRead()) throw IllegalStateException("Source is unavailable")
         val destination = File(destinationPath)
         val temporary = File(destinationDirectory, ".personal-gallery-$currentOperationId-${UUID.randomUUID()}.tmp")
+        plan.put("method", if (currentType == TYPE_MOVE) "copy-delete" else "copy")
+        plans.put(sourcePath, plan)
+        persistState()
         log("COPY", "Copying to temporary file: ${temporary.name}; expected name=${destination.name}; size=$expectedSize; mtime(s)=$expectedMtimeSeconds")
         publishProgress(processed, total, succeeded, failed, source.name, "Copying", 0, if (currentType == TYPE_MOVE) "Fallback · writing copy before deleting source" else "Writing temporary copy")
         try {
@@ -459,6 +468,9 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
             log("SKIP", "Already in destination album; no move performed: ${source.name}")
             return false
         }
+        plan.put("method", "atomic-rename")
+        plans.put(sourcePath, plan)
+        persistState()
         log("MOVE", "Attempting atomic rename: ${source.name} → $expectedDestinationName")
         publishProgress(processed, total, succeeded, failed, source.name, "Moving", 0, "Trying atomic rename")
         try {
@@ -481,6 +493,9 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
             log("FALLBACK", "Atomic rename failed across storage volumes; using copy-and-delete: ${e.message}")
         }
 
+        plan.put("method", "copy-delete")
+        plans.put(sourcePath, plan)
+        persistState()
         publishProgress(processed, total, succeeded, failed, source.name, "Copying", 0, "Fallback · copy and verify before deleting")
         val copied = copyOne(source, destinationDirectory, destinationPath, expectedSize, expectedMtimeSeconds, sourcePath, plan, processed, total, succeeded, failed)
         if (!verifyDestination(copied, expectedDestinationName, expectedSize, expectedMtimeSeconds)) {
