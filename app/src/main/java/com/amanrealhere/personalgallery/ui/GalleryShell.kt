@@ -71,6 +71,29 @@ import kotlinx.coroutines.withContext
 private enum class GalleryDestination { Albums, AddAlbum }
 
 @Composable
+private fun OperationLogText(text: String) {
+    val scheme = MaterialTheme.colorScheme
+    val successColor = if (androidx.compose.foundation.isSystemInDarkTheme()) Color(0xFF9AD7A6) else Color(0xFF237A3B)
+    val warningColor = if (androidx.compose.foundation.isSystemInDarkTheme()) Color(0xFFFFD180) else Color(0xFF9A5B00)
+    val annotated = buildAnnotatedString {
+        val lines = text.lines()
+        lines.forEachIndexed { index, line ->
+            val tag = Regex("\\[(.*?)\\]").findAll(line).lastOrNull()?.groupValues?.getOrNull(1).orEmpty()
+            val lineColor = when (tag) {
+                "ERROR", "FAIL", "RECONCILE_FAIL", "INTERRUPTED" -> scheme.error
+                "SUCCESS", "SUMMARY" -> successColor
+                "FALLBACK", "RETRY" -> warningColor
+                "VERIFY", "METHOD", "PUBLISH", "STATE" -> scheme.primary
+                else -> scheme.onSurfaceVariant
+            }
+            withStyle(SpanStyle(color = lineColor)) { append(line) }
+            if (index < lines.lastIndex) append("\\n")
+        }
+    }
+    Text(annotated, style = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 11.sp, lineHeight = 14.sp))
+}
+
+@Composable
 fun GalleryShell(viewModel: GalleryViewModel) {
     val context = LocalContext.current
     var sidebarExpanded by remember { mutableStateOf(true) }
@@ -367,54 +390,103 @@ fun GalleryShell(viewModel: GalleryViewModel) {
                 }
 
                 if (latestFileOperationId != null && operationDialogVisible) {
-                    AlertDialog(
-                        onDismissRequest = {},
-                        title = { Text(if (displayedFileOperation?.state?.isFinished == true) "File operation finished" else "File operation") },
-                        text = {
-                            Column(Modifier.fillMaxWidth().verticalScroll(operationLogScrollState)) {
-                                val queuedOperations = fileOperationWorkInfos.count {
-                                    it.state == WorkInfo.State.ENQUEUED || it.state == WorkInfo.State.BLOCKED
-                                }
-                                if (displayedFileOperation != null) {
-                                    Text(
-                                        "${displayedFileOperation.state.name} · $fileOperationProcessed / $fileOperationTotal · $fileOperationSucceeded succeeded · $fileOperationFailed failed",
-                                        style = MaterialTheme.typography.bodyMedium
-                                    )
-                                } else {
-                                    Text(
-                                        "Saved operation result · $fileOperationProcessed / $fileOperationTotal · $fileOperationSucceeded succeeded · $fileOperationFailed failed",
-                                        style = MaterialTheme.typography.bodyMedium
-                                    )
-                                }
-                                if (queuedOperationDetails.isNotEmpty()) {
-                                    Text("Queued operations", style = MaterialTheme.typography.titleSmall)
-                                    queuedOperationDetails.forEach { detail ->
-                                        Text(
-                                            detail,
-                                            style = MaterialTheme.typography.bodySmall,
-                                            maxLines = 3
-                                        )
-                                    }
-                                } else if (queuedOperations > 0) {
-                                    Text("$queuedOperations operation(s) queued", style = MaterialTheme.typography.bodySmall)
-                                }
-                                if (fileOperationTotal > 0) {
-                                    LinearProgressIndicator(
-                                        progress = { (fileOperationProcessed.toFloat() / fileOperationTotal).coerceIn(0f, 1f) },
-                                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
-                                    )
-                                }
-                                if (fileOperationCurrent.isNotBlank()) Text("Current: $fileOperationCurrent")
-                                Text("Status: $fileOperationStatus", style = MaterialTheme.typography.bodySmall)
-                                Spacer(Modifier.height(12.dp))
-                                Text("Operation log", style = MaterialTheme.typography.titleSmall)
-                                Text(operationLogText, style = MaterialTheme.typography.bodySmall)
+                    val workState = displayedFileOperation?.state
+                    val operationFinished = workState?.isFinished == true
+                    val operationRunning = workState == WorkInfo.State.RUNNING
+                    val operationType = displayedFileOperation?.outputData?.getString(MediaFileOperationWorker.KEY_TYPE)
+                        ?: displayedFileOperation?.inputData?.getString(MediaFileOperationWorker.KEY_TYPE)
+                        ?: savedOperationResult.optString("type", "COPY")
+                    val operationName = if (operationType == MediaFileOperationWorker.TYPE_MOVE) "Move" else "Copy"
+                    val operationTitle = when {
+                        operationFinished && workState == WorkInfo.State.SUCCEEDED && fileOperationFailed == 0 -> "$operationName completed"
+                        operationFinished && workState == WorkInfo.State.SUCCEEDED -> "$operationName finished with errors"
+                        operationFinished && workState == WorkInfo.State.FAILED -> "$operationName failed"
+                        operationFinished && workState == WorkInfo.State.CANCELLED -> "$operationName cancelled"
+                        operationType == MediaFileOperationWorker.TYPE_MOVE -> "Moving images"
+                        else -> "Copying images"
+                    }
+                    val totalUnits = fileOperationTotal.coerceAtLeast(1) * 1000
+                    val progressFraction = (fileOperationProgressUnits.toFloat() / totalUnits).coerceIn(0f, 1f)
+                    val progressPercent = (progressFraction * 100f).toInt()
+                    val startTime = operationStartedAtMillis.takeIf { it > 0L } ?: 0L
+                    var stopwatchNow by remember(latestFileOperationId) { mutableStateOf(System.currentTimeMillis()) }
+                    var frozenElapsed by remember(latestFileOperationId) { mutableStateOf<Long?>(null) }
+                    LaunchedEffect(workState, startTime, operationDurationMs) {
+                        if (operationFinished) {
+                            frozenElapsed = if (operationDurationMs >= 0L) operationDurationMs
+                                else if (startTime > 0L) (System.currentTimeMillis() - startTime).coerceAtLeast(0L) else 0L
+                        } else if (operationRunning) {
+                            frozenElapsed = null
+                            while (true) {
+                                stopwatchNow = System.currentTimeMillis()
+                                delay(32)
                             }
-                        },
-                        confirmButton = {
-                            TextButton(onClick = { operationDialogVisible = false }) { Text("Close") }
                         }
-                    )
+                    }
+                    val elapsed = frozenElapsed ?: if (operationRunning && startTime > 0L)
+                        (stopwatchNow - startTime).coerceAtLeast(0L) else 0L
+                    val hours = elapsed / 3_600_000L
+                    val minutes = (elapsed / 60_000L) % 60
+                    val seconds = (elapsed / 1_000L) % 60
+                    val millis = elapsed % 1_000L
+                    val timerText = if (hours > 0) String.format(java.util.Locale.US, "%d:%02d:%02d.%03d", hours, minutes, seconds, millis)
+                        else String.format(java.util.Locale.US, "%02d:%02d.%03d", minutes, seconds, millis)
+                    Dialog(
+                        onDismissRequest = {},
+                        properties = DialogProperties(usePlatformDefaultWidth = false)
+                    ) {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(0.94f).widthIn(max = 520.dp).padding(12.dp),
+                            shape = RoundedCornerShape(28.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
+                        ) {
+                            Column(
+                                modifier = Modifier.fillMaxWidth().padding(20.dp).verticalScroll(operationDialogScrollState),
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Text(operationTitle, style = MaterialTheme.typography.headlineSmall)
+                                Text(
+                                    "$fileOperationProcessed of $fileOperationTotal items · $fileOperationSucceeded succeeded · $fileOperationFailed failed",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                if (fileOperationTotal > 0) {
+                                    LinearProgressIndicator(progress = { progressFraction }, modifier = Modifier.fillMaxWidth())
+                                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                        Text("$fileOperationProcessed of $fileOperationTotal items", style = MaterialTheme.typography.labelMedium)
+                                        Text("$progressPercent%", style = MaterialTheme.typography.labelMedium)
+                                    }
+                                }
+                                if (fileOperationCurrent.isNotBlank() && !operationFinished) {
+                                    Text(fileOperationCurrent, style = MaterialTheme.typography.titleSmall, maxLines = 1)
+                                }
+                                if (!operationFinished) {
+                                    Text(fileOperationStatus, style = MaterialTheme.typography.bodyMedium)
+                                    if (fileOperationDetail.isNotBlank()) {
+                                        Text(fileOperationDetail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                }
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                    Text("Elapsed", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text(timerText, style = MaterialTheme.typography.titleMedium, fontFamily = FontFamily.Monospace)
+                                }
+                                val queuedCount = fileOperationWorkInfos.count { it.state == WorkInfo.State.ENQUEUED || it.state == WorkInfo.State.BLOCKED }
+                                if (queuedCount > 0) Text("$queuedCount operation(s) queued", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                                    TextButton(onClick = { advancedLogVisible = !advancedLogVisible }) {
+                                        Text(if (advancedLogVisible) "Summary" else "Advanced log")
+                                    }
+                                    TextButton(onClick = { operationDialogVisible = false; advancedLogVisible = false }) { Text("Close") }
+                                }
+                                if (advancedLogVisible) {
+                                    Text("Operation log", style = MaterialTheme.typography.titleSmall)
+                                    Column(Modifier.fillMaxWidth().heightIn(max = 320.dp).verticalScroll(operationLogScrollState)) {
+                                        OperationLogText(operationLogText)
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
