@@ -3,9 +3,11 @@ package com.amanrealhere.personalgallery.ui
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -15,14 +17,21 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.material3.Surface
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
@@ -33,8 +42,15 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.work.WorkInfo
@@ -46,25 +62,13 @@ import com.amanrealhere.personalgallery.ui.screens.addalbum.AddAlbumScreen
 import com.amanrealhere.personalgallery.ui.screens.album.AlbumContentsScreen
 import com.amanrealhere.personalgallery.ui.screens.home.HomeScreen
 import java.io.File
-import java.io.RandomAccessFile
 import org.json.JSONObject
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 private enum class GalleryDestination { Albums, AddAlbum }
-
-private fun readOperationLogTail(file: File, maxBytes: Int): String =
-    RandomAccessFile(file, "r").use { reader ->
-        val length = reader.length()
-        val start = (length - maxBytes.toLong()).coerceAtLeast(0L)
-        reader.seek(start)
-        if (start > 0L) reader.readLine()
-        val remaining = (length - reader.filePointer).coerceAtLeast(0L).toInt()
-        val bytes = ByteArray(remaining)
-        reader.readFully(bytes)
-        val tail = String(bytes, Charsets.UTF_8)
-        if (start > 0L) "[Recent log excerpt]\n\n" + tail else tail
-    }
 
 @Composable
 fun GalleryShell(viewModel: GalleryViewModel) {
@@ -94,14 +98,15 @@ fun GalleryShell(viewModel: GalleryViewModel) {
     val activeFileOperation = fileOperationWorkInfos.firstOrNull { it.state == WorkInfo.State.RUNNING }
     val displayedFileOperation = activeFileOperation
         ?: latestFileOperationId?.let { id -> fileOperationWorkInfos.firstOrNull { it.id.toString() == id } }
+    var savedOperationState by remember { mutableStateOf(JSONObject())
     var savedOperationResult by remember { mutableStateOf(JSONObject()) }
-    LaunchedEffect(latestFileOperationId, displayedFileOperation?.state) {
+    LaunchedEffect(latestFileOperationId, displayedFileOperation?.state, displayedFileOperation?.progress, displayedFileOperation?.outputData) {
         val id = latestFileOperationId
-        savedOperationResult = if (id == null) JSONObject() else withContext(Dispatchers.IO) {
+        savedOperationState = if (id == null) JSONObject() else withContext(Dispatchers.IO) {
             val stateFile = File(context.filesDir, "media-operation-" + id + ".state.json")
-            runCatching { JSONObject(stateFile.readText()).optJSONObject("result") ?: JSONObject() }
-                .getOrElse { JSONObject() }
+            runCatching { JSONObject(stateFile.readText()) }.getOrElse { JSONObject() }
         }
+        savedOperationResult = savedOperationState.optJSONObject("result") ?: JSONObject()
     }
     val fileOperationProcessed = displayedFileOperation?.progress?.getInt(MediaFileOperationWorker.KEY_PROCESSED, 0)
         ?: displayedFileOperation?.outputData?.getInt(MediaFileOperationWorker.KEY_PROCESSED, 0) ?: savedOperationResult.optInt("processed", 0)
@@ -112,6 +117,11 @@ fun GalleryShell(viewModel: GalleryViewModel) {
     val fileOperationFailed = displayedFileOperation?.progress?.getInt(MediaFileOperationWorker.KEY_FAILED, 0)
         ?: displayedFileOperation?.outputData?.getInt(MediaFileOperationWorker.KEY_FAILED, 0) ?: savedOperationResult.optInt("failed", 0)
     val fileOperationCurrent = displayedFileOperation?.progress?.getString(MediaFileOperationWorker.KEY_CURRENT).orEmpty()
+    val fileOperationDetail = displayedFileOperation?.progress?.getString(MediaFileOperationWorker.KEY_DETAIL).orEmpty()
+    val fileOperationProgressUnits = displayedFileOperation?.progress?.getInt(MediaFileOperationWorker.KEY_PROGRESS_UNITS, fileOperationProcessed * 1000)
+        ?: displayedFileOperation?.outputData?.getInt(MediaFileOperationWorker.KEY_PROGRESS_UNITS, fileOperationProcessed * 1000)
+        ?: savedOperationResult.optInt(MediaFileOperationWorker.KEY_PROGRESS_UNITS, fileOperationProcessed * 1000)
+    val operationStartedAtMillis = savedOperationState.optLong("startedAtMillis", 0L)
     val fileOperationStatus = if (displayedFileOperation?.state?.isFinished == true) {
         displayedFileOperation.outputData.getString(MediaFileOperationWorker.KEY_SUMMARY)
             ?: displayedFileOperation.outputData.getString(MediaFileOperationWorker.KEY_ERROR)
@@ -121,46 +131,53 @@ fun GalleryShell(viewModel: GalleryViewModel) {
             ?: if (displayedFileOperation != null) displayedFileOperation.state.name else savedOperationResult.optString("summary").takeIf { it.isNotBlank() } ?: "Saved operation log; WorkManager record is unavailable"
     }
     var operationDialogVisible by remember { mutableStateOf(false) }
-    var operationLogText by remember { mutableStateOf("Loading operation log…") }
+    var advancedLogVisible by remember { mutableStateOf(false) }
+    var operationLogText by remember { mutableStateOf("") }
     val operationLogScrollState = rememberScrollState()
+    val operationDialogScrollState = rememberScrollState()
     var operationLaunchError by remember { mutableStateOf<String?>(null) }
-    var queuedOperationDetails by remember { mutableStateOf<List<String>>(emptyList()) }
-    LaunchedEffect(fileOperationWorkInfos) {
-        val queued = fileOperationWorkInfos.filter {
-            it.state == WorkInfo.State.ENQUEUED || it.state == WorkInfo.State.BLOCKED
-        }
-        queuedOperationDetails = withContext(Dispatchers.IO) {
-            queued.map { work ->
-                val requestFile = File(context.filesDir, "media-operation-" + work.id + ".json")
-                val request = runCatching { JSONObject(requestFile.readText()) }.getOrNull()
-                val type = request?.optString("type")?.takeIf { it.isNotBlank() } ?: "File operation"
-                val count = request?.optJSONArray("sources")?.length() ?: 0
-                val destination = request?.optString("destination")?.takeIf { it.isNotBlank() } ?: "Destination unavailable"
-                type + " · " + count + " file(s) → " + destination + " · " + work.state.name
-            }
-        }
-    }
+    val pendingToastOperationIds = remember { mutableSetOf<String>() }
     LaunchedEffect(viewModel) {
-        viewModel.fileOperationMessages.collect { operationLaunchError = it }
+        launch { viewModel.fileOperationStartedIds.collect { pendingToastOperationIds.add(it) } }
+        launch { viewModel.fileOperationMessages.collect { operationLaunchError = it } }
+    }
+    LaunchedEffect(fileOperationWorkInfos) {
+        for (work in fileOperationWorkInfos.filter { it.state.isFinished }) {
+            val id = work.id.toString()
+            if (!pendingToastOperationIds.remove(id)) continue
+            val type = work.outputData.getString(MediaFileOperationWorker.KEY_TYPE)
+                ?: work.inputData.getString(MediaFileOperationWorker.KEY_TYPE)
+            val action = if (type == MediaFileOperationWorker.TYPE_MOVE) "Move" else "Copy"
+            val failedCount = work.outputData.getInt(MediaFileOperationWorker.KEY_FAILED, 0)
+            val summary = work.outputData.getString(MediaFileOperationWorker.KEY_SUMMARY).orEmpty()
+            val message = when (work.state) {
+                WorkInfo.State.FAILED -> action + " failed"
+                WorkInfo.State.CANCELLED -> action + " cancelled"
+                WorkInfo.State.SUCCEEDED -> if (failedCount > 0 || summary.contains("album refresh failure", true)) action + " finished with errors" else action + " completed"
+                else -> continue
+            }
+            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+        }
     }
     LaunchedEffect(latestFileOperationId) {
         if (latestFileOperationId != null) operationDialogVisible = true
     }
-    LaunchedEffect(operationLogText) {
-        operationLogScrollState.animateScrollTo(operationLogScrollState.maxValue)
+    LaunchedEffect(operationLogText, advancedLogVisible) {
+        if (advancedLogVisible) operationLogScrollState.animateScrollTo(operationLogScrollState.maxValue)
     }
-    LaunchedEffect(displayedFileOperation?.id, displayedFileOperation?.progress, displayedFileOperation?.outputData, latestFileOperationId) {
-        val work = displayedFileOperation
-        val operationId = work?.id?.toString() ?: latestFileOperationId
-        operationLogText = if (operationId == null) "" else withContext(Dispatchers.IO) {
-            val logFile = File(context.filesDir, "media-operation-${operationId}.log")
-            if (logFile.isFile) runCatching {
-                if (work == null || work.state.isFinished) logFile.readText() else readOperationLogTail(logFile, 64 * 1024)
-            }.getOrElse { "Unable to read detailed log: ${it.message}" }
-            else "Operation log has not been created yet."
+    LaunchedEffect(displayedFileOperation?.id, displayedFileOperation?.progress, displayedFileOperation?.outputData, latestFileOperationId, advancedLogVisible) {
+        if (!advancedLogVisible) {
+            operationLogText = ""
+        } else {
+            val operationId = displayedFileOperation?.id?.toString() ?: latestFileOperationId
+            operationLogText = if (operationId == null) "" else withContext(Dispatchers.IO) {
+                val logFile = File(context.filesDir, "media-operation-" + operationId + ".log")
+                if (logFile.isFile) runCatching { logFile.readText() }
+                    .getOrElse { "Unable to read detailed log: " + it.message }
+                else "Operation log has not been created yet."
+            }
         }
     }
-
     val selectedAlbum = remember(albums, selectedAlbumPath) {
         albums.firstOrNull { it.canonicalPath == selectedAlbumPath }
     }
@@ -193,7 +210,10 @@ fun GalleryShell(viewModel: GalleryViewModel) {
 
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
-    ) {
+    ) { granted ->
+        if (!granted && pendingFileOperation.value != null) {
+            Toast.makeText(context, "Notifications disabled", Toast.LENGTH_SHORT).show()
+        }
         pendingGeneration.value?.invoke()
         pendingGeneration.value = null
         pendingFileOperation.value?.invoke()
@@ -204,17 +224,12 @@ fun GalleryShell(viewModel: GalleryViewModel) {
         if (Build.VERSION.SDK_INT >= 33 &&
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
         ) {
-            val marker = File(GalleryStorage.getInstance(context).root, ".notification-permission-requested")
-            if (!marker.exists()) {
-                marker.createNewFile()
-                pendingFileOperation.value = action
-                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                return
-            }
+            pendingFileOperation.value = action
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            return
         }
         action()
     }
-
     fun startGeneration(action: () -> Unit) {
         if (Build.VERSION.SDK_INT >= 33 &&
             ContextCompat.checkSelfPermission(
