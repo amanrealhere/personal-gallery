@@ -169,7 +169,6 @@ fun GalleryShell(viewModel: GalleryViewModel) {
     LaunchedEffect(fileOperationWorkInfos, pendingToastOperationIds) {
         val completedToasts = fileOperationWorkInfos.filter { it.state.isFinished && it.id.toString() in pendingToastOperationIds }
         if (completedToasts.isNotEmpty()) {
-            pendingToastOperationIds = pendingToastOperationIds - completedToasts.map { it.id.toString() }.toSet()
             completedToasts.forEach { work ->
                 val type = work.outputData.getString(MediaFileOperationWorker.KEY_TYPE)
                     ?: work.inputData.getString(MediaFileOperationWorker.KEY_TYPE)
@@ -184,6 +183,7 @@ fun GalleryShell(viewModel: GalleryViewModel) {
                 }
                 Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
             }
+            pendingToastOperationIds = pendingToastOperationIds - completedToasts.map { it.id.toString() }.toSet()
         }
     }
     LaunchedEffect(latestFileOperationId) {
