@@ -72,7 +72,14 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
             return@withContext Result.failure(workDataOf(KEY_ERROR to "Destination album is unavailable"))
         }
 
-        operationState = try { if (stateFile.isFile) JSONObject(stateFile.readText()) else JSONObject() } catch (_: Exception) { JSONObject() }
+        operationState = if (stateFile.isFile) {
+            try {
+                JSONObject(stateFile.readText())
+            } catch (exception: Exception) {
+                log("ERROR", "Persistent operation state is unreadable; refusing to restart without recovery data: ${exception.message}")
+                return@withContext Result.failure(workDataOf(KEY_ERROR to "Operation state is unreadable; no files were processed in this attempt"))
+            }
+        } else JSONObject()
         plans = operationState.optJSONObject("plans") ?: JSONObject()
         completed = operationState.optJSONObject("completed") ?: JSONObject()
         persistState()
