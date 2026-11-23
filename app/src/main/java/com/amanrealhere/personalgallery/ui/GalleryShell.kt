@@ -14,10 +14,14 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
@@ -42,6 +46,8 @@ import com.amanrealhere.personalgallery.ui.screens.addalbum.AddAlbumScreen
 import com.amanrealhere.personalgallery.ui.screens.album.AlbumContentsScreen
 import com.amanrealhere.personalgallery.ui.screens.home.HomeScreen
 import java.io.File
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 private enum class GalleryDestination { Albums, AddAlbum }
 
@@ -69,15 +75,32 @@ fun GalleryShell(viewModel: GalleryViewModel) {
     val fileOperationWorkInfos by WorkManager.getInstance(context)
         .getWorkInfosByTagFlow(MediaFileOperationWorker.TAG)
         .collectAsStateWithLifecycle(initialValue = emptyList())
+    val latestFileOperationId by viewModel.latestFileOperationId.collectAsStateWithLifecycle()
     val activeFileOperation = fileOperationWorkInfos.firstOrNull { it.state == WorkInfo.State.RUNNING }
-    val fileOperationProcessed = activeFileOperation?.progress?.getInt(MediaFileOperationWorker.KEY_PROCESSED, 0) ?: 0
-    val fileOperationTotal = activeFileOperation?.progress?.getInt(MediaFileOperationWorker.KEY_TOTAL, 0) ?: 0
-    val fileOperationCurrent = activeFileOperation?.progress?.getString(MediaFileOperationWorker.KEY_CURRENT).orEmpty()
-    val fileOperationStatus = activeFileOperation?.progress?.getString(MediaFileOperationWorker.KEY_STATUS)
-        ?: if (activeFileOperation != null) "Working…" else ""
-    LaunchedEffect(viewModel) {
-        viewModel.fileOperationMessages.collect { message ->
-            Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+    val displayedFileOperation = activeFileOperation
+        ?: latestFileOperationId?.let { id -> fileOperationWorkInfos.firstOrNull { it.id.toString() == id } }
+    val fileOperationProcessed = displayedFileOperation?.progress?.getInt(MediaFileOperationWorker.KEY_PROCESSED, 0) ?: 0
+    val fileOperationTotal = displayedFileOperation?.progress?.getInt(MediaFileOperationWorker.KEY_TOTAL, 0)
+        ?: displayedFileOperation?.outputData?.getInt(MediaFileOperationWorker.KEY_TOTAL, 0) ?: 0
+    val fileOperationSucceeded = displayedFileOperation?.progress?.getInt(MediaFileOperationWorker.KEY_SUCCEEDED, 0)
+        ?: displayedFileOperation?.outputData?.getInt(MediaFileOperationWorker.KEY_SUCCEEDED, 0) ?: 0
+    val fileOperationFailed = displayedFileOperation?.progress?.getInt(MediaFileOperationWorker.KEY_FAILED, 0)
+        ?: displayedFileOperation?.outputData?.getInt(MediaFileOperationWorker.KEY_FAILED, 0) ?: 0
+    val fileOperationCurrent = displayedFileOperation?.progress?.getString(MediaFileOperationWorker.KEY_CURRENT).orEmpty()
+    val fileOperationStatus = displayedFileOperation?.progress?.getString(MediaFileOperationWorker.KEY_STATUS)
+        ?: displayedFileOperation?.outputData?.getString(MediaFileOperationWorker.KEY_SUMMARY)
+        ?: if (displayedFileOperation != null) displayedFileOperation.state.name else ""
+    var operationDialogVisible by remember { mutableStateOf(false) }
+    var operationLogText by remember { mutableStateOf("Loading operation log…") }
+    LaunchedEffect(latestFileOperationId) {
+        if (latestFileOperationId != null) operationDialogVisible = true
+    }
+    LaunchedEffect(displayedFileOperation?.id, displayedFileOperation?.progress, displayedFileOperation?.outputData) {
+        val work = displayedFileOperation
+        operationLogText = if (work == null) "" else withContext(Dispatchers.IO) {
+            val logFile = File(context.filesDir, "media-operation-${work.id}.log")
+            if (logFile.isFile) runCatching { logFile.readText() }.getOrElse { "Unable to read detailed log: ${it.message}" }
+            else "Operation log has not been created yet."
         }
     }
 
@@ -260,33 +283,33 @@ fun GalleryShell(viewModel: GalleryViewModel) {
                     }
                 }
 
-                if (activeFileOperation != null) {
-                    Surface(
-                        modifier = Modifier.align(androidx.compose.ui.Alignment.BottomCenter)
-                            .padding(16.dp),
-                        shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
-                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                        shadowElevation = 5.dp
-                    ) {
-                        Column(Modifier.padding(horizontal = 18.dp, vertical = 12.dp)) {
-                            Text(
-                                if (fileOperationTotal > 0) "$fileOperationStatus · $fileOperationProcessed / $fileOperationTotal"
-                                else fileOperationStatus,
-                                style = MaterialTheme.typography.bodyMedium
-                            )
-                            if (fileOperationTotal > 0) {
-                                LinearProgressIndicator(
-                                    progress = { (fileOperationProcessed.toFloat() / fileOperationTotal).coerceIn(0f, 1f) },
-                                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+                if (displayedFileOperation != null && operationDialogVisible) {
+                    AlertDialog(
+                        onDismissRequest = {},
+                        title = { Text(if (displayedFileOperation.state.isFinished) "File operation finished" else "File operation") },
+                        text = {
+                            Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
+                                Text(
+                                    "${displayedFileOperation.state.name} · $fileOperationProcessed / $fileOperationTotal · $fileOperationSucceeded succeeded · $fileOperationFailed failed",
+                                    style = MaterialTheme.typography.bodyMedium
                                 )
-                            } else {
-                                LinearProgressIndicator(modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
+                                if (fileOperationTotal > 0) {
+                                    LinearProgressIndicator(
+                                        progress = { (fileOperationProcessed.toFloat() / fileOperationTotal).coerceIn(0f, 1f) },
+                                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
+                                    )
+                                }
+                                if (fileOperationCurrent.isNotBlank()) Text("Current: $fileOperationCurrent")
+                                Text("Status: $fileOperationStatus", style = MaterialTheme.typography.bodySmall)
+                                Spacer(Modifier.height(12.dp))
+                                Text("Operation log", style = MaterialTheme.typography.titleSmall)
+                                Text(operationLogText, style = MaterialTheme.typography.bodySmall)
                             }
-                            if (fileOperationCurrent.isNotBlank()) {
-                                Text(fileOperationCurrent, style = MaterialTheme.typography.labelSmall)
-                            }
+                        },
+                        confirmButton = {
+                            TextButton(onClick = { operationDialogVisible = false }) { Text("Close") }
                         }
-                    }
+                    )
                 }
             }
         }
