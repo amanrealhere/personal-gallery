@@ -179,8 +179,7 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
         Result.success(workDataOf(
             KEY_PROCESSED to processed, KEY_TOTAL to total,
             KEY_SUCCEEDED to succeeded, KEY_FAILED to failed,
-            KEY_SUMMARY to summary, KEY_LOG_PATH to operationLog.absolutePath,
-            KEY_ERRORS to briefErrors.take(12).joinToString("\n").take(6000)
+            KEY_SUMMARY to summary, KEY_LOG_PATH to operationLog.absolutePath
         ))
     }
 
