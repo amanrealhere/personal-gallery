@@ -456,9 +456,10 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
             return false
         }
         log("MOVE", "Attempting atomic rename: ${source.name} → $expectedDestinationName")
-        setForeground(createForegroundInfo(TYPE_MOVE, processed, total, processed * 1000, "Moving " + source.name, "Trying atomic rename"))
+        publishProgress(processed, total, succeeded, failed, source.name, "Moving", 0, "Trying atomic rename")
         try {
             Files.move(source.toPath(), destination.toPath(), StandardCopyOption.ATOMIC_MOVE)
+            publishProgress(processed, total, succeeded, failed, source.name, "Verifying", 0, "Checking destination name, size and mtime")
             val valid = verifyDestination(destination, expectedDestinationName, expectedSize, expectedMtimeSeconds) && !source.exists()
             log("VERIFY", "Atomic rename checks: name=${destination.name == expectedDestinationName}; size=${destination.length() == expectedSize}; mtime-seconds=${destination.lastModified()/1000L == expectedMtimeSeconds}; source-absent=${!source.exists()}")
             if (valid) {
@@ -477,7 +478,6 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
         }
 
         publishProgress(processed, total, succeeded, failed, source.name, "Copying", 0, "Fallback · copy and verify before deleting")
-        setForeground(createForegroundInfo(TYPE_MOVE, processed, total, processed * 1000, "Copying " + source.name, "Fallback · copy and verify before deleting"))
         val copied = copyOne(source, destinationDirectory, destinationPath, expectedSize, expectedMtimeSeconds, sourcePath, plan, processed, total, succeeded, failed)
         if (!verifyDestination(copied, expectedDestinationName, expectedSize, expectedMtimeSeconds)) {
             throw IllegalStateException("Destination verification failed; original retained")
@@ -630,7 +630,8 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
 
     private fun postCompletionNotification(type: String, summary: String) {
         createChannel()
-        val title = if (summary.startsWith("Operation failed")) "File operation failed" else if (type == TYPE_MOVE) "Move finished" else "Copy finished"
+        val hasIssues = Regex("[1-9][0-9]* failed").containsMatchIn(summary) || summary.contains("album refresh failure", ignoreCase = true)
+        val title = if (summary.startsWith("Operation failed")) "File operation failed" else if (hasIssues) (if (type == TYPE_MOVE) "Move finished with issues" else "Copy finished with issues") else if (type == TYPE_MOVE) "Move completed" else "Copy completed"
         val notification = NotificationCompat.Builder(applicationContext, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_menu_gallery)
             .setContentTitle(title)
