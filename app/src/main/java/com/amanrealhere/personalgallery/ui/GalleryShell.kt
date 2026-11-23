@@ -91,6 +91,9 @@ fun GalleryShell(viewModel: GalleryViewModel) {
         .getWorkInfosByTagFlow(MediaFileOperationWorker.TAG)
         .collectAsStateWithLifecycle(initialValue = emptyList())
     val latestFileOperationId by viewModel.latestFileOperationId.collectAsStateWithLifecycle()
+    val activeFileOperation = fileOperationWorkInfos.firstOrNull { it.state == WorkInfo.State.RUNNING }
+    val displayedFileOperation = activeFileOperation
+        ?: latestFileOperationId?.let { id -> fileOperationWorkInfos.firstOrNull { it.id.toString() == id } }
     var savedOperationResult by remember { mutableStateOf(JSONObject()) }
     LaunchedEffect(latestFileOperationId, displayedFileOperation?.state) {
         val id = latestFileOperationId
@@ -100,9 +103,6 @@ fun GalleryShell(viewModel: GalleryViewModel) {
                 .getOrElse { JSONObject() }
         }
     }
-    val activeFileOperation = fileOperationWorkInfos.firstOrNull { it.state == WorkInfo.State.RUNNING }
-    val displayedFileOperation = activeFileOperation
-        ?: latestFileOperationId?.let { id -> fileOperationWorkInfos.firstOrNull { it.id.toString() == id } }
     val fileOperationProcessed = displayedFileOperation?.progress?.getInt(MediaFileOperationWorker.KEY_PROCESSED, 0)
         ?: displayedFileOperation?.outputData?.getInt(MediaFileOperationWorker.KEY_PROCESSED, 0) ?: 0
     val fileOperationTotal = displayedFileOperation?.progress?.getInt(MediaFileOperationWorker.KEY_TOTAL, 0)
