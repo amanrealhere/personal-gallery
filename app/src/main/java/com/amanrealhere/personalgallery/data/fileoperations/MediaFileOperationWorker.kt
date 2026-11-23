@@ -489,7 +489,7 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
         if (source.length() != expectedSize || source.lastModified() / 1000L != expectedMtimeSeconds) {
             throw IllegalStateException("Source changed before deletion; original retained")
         }
-        setForeground(createForegroundInfo(TYPE_MOVE, processed, total, processed * 1000, "Deleting original", "Destination verified · removing source"))
+        publishProgress(processed, total, succeeded, failed, source.name, "Deleting original", 0, "Destination verified · removing source")
         log("DELETE", "Destination name/size/mtime verified; deleting original source")
         if (!source.delete() || source.exists()) throw IllegalStateException("Destination verified; original could not be deleted")
         log("METHOD", "Completed by copy, verification, and source deletion")
