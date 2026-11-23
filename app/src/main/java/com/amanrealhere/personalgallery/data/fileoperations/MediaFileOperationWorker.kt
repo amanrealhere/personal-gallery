@@ -143,8 +143,7 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
                 // Recover a file published before the worker was interrupted before
                 // it could persist its completion record. The destination was
                 // planned and persisted before the file operation began.
-                val recoverablePublishedFile = plan.optString("phase") == "published" ||
-                    (plan.optBoolean("started", false) && destination.exists()) ||
+                val recoverablePublishedFile = plan.optString("phase") in setOf("publishing", "published") ||
                     (type == TYPE_MOVE && !source.exists())
                 if (plan.optBoolean("started", false) && plan.optBoolean("sourcePresent", true) && destination.exists() &&
                     verifyDestination(destination, destination.name, expectedSize, expectedMtimeSeconds) &&
@@ -319,6 +318,10 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
             }
             log("VERIFY", "Temporary mtime verified to seconds: ${temporary.lastModified()/1000L}")
             val expectedDestinationName = File(destinationPath).name
+            plan.put("phase", "publishing")
+            plans.put(sourcePath, plan)
+            persistState()
+            log("STATE", "Publishing phase persisted before destination rename")
             Files.move(temporary.toPath(), destination.toPath())
             log("PUBLISH", "Temporary file published using same-directory filesystem move")
             if (!verifyDestination(destination, expectedDestinationName, expectedSize, expectedMtimeSeconds)) {
