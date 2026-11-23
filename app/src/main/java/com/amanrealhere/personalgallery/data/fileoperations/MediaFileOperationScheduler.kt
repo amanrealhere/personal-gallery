@@ -41,7 +41,10 @@ object MediaFileOperationScheduler {
 
         val work = OneTimeWorkRequestBuilder<MediaFileOperationWorker>()
             .setId(UUID.fromString(id))
-            .setInputData(workDataOf(MediaFileOperationWorker.KEY_OPERATION_ID to id))
+            .setInputData(workDataOf(
+                MediaFileOperationWorker.KEY_OPERATION_ID to id,
+                MediaFileOperationWorker.KEY_TYPE to type
+            ))
             .addTag(MediaFileOperationWorker.TAG)
             .build()
         try {
