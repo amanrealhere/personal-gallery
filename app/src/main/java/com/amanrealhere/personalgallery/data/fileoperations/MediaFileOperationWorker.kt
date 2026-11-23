@@ -113,11 +113,11 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
                     val recordedDestination = File(completedRecord.optString("destination", destination.absolutePath))
                     val recordedSize = completedRecord.optLong("size", expectedSize)
                     val recordedMtime = completedRecord.optLong("mtimeSeconds", expectedMtimeSeconds)
-                    val validExisting = verifyDestination(recordedDestination, recordedDestination.name, recordedSize, recordedMtime)
-                    val sourceStateValid = type != TYPE_MOVE || !source.exists()
-                    if (validExisting && sourceStateValid) {
+                    val validExisting = recordedDestination.absolutePath == destination.absolutePath &&
+                        verifyDestination(recordedDestination, destination.name, recordedSize, recordedMtime)
+                    if (validExisting) {
                         succeeded++
-                        log("RESUME", "Previously completed item verified and skipped: ${recordedDestination.name}")
+                        log("RESUME", "Previously completed destination verified and skipped: ${recordedDestination.name}; source is not touched")
                         processed++
                         publishProgress(processed, total, succeeded, failed, source.name, "Verified completed item")
                         continue
