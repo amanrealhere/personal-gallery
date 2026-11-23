@@ -81,31 +81,10 @@ class GalleryViewModel(
                     .first { infos -> infos.any { it.id.toString() == operationId && it.state.isFinished } }
                     .first { it.id.toString() == operationId }
 
-                val output = finishedWork.outputData
-                val succeeded = output.getInt(MediaFileOperationWorker.KEY_SUCCEEDED, 0)
-                val failed = output.getInt(MediaFileOperationWorker.KEY_FAILED, uniqueSources.size)
-                val errorMessage = output.getString(MediaFileOperationWorker.KEY_ERROR)
-                val logPath = output.getString(MediaFileOperationWorker.KEY_LOG_PATH)
-                    ?: File(getApplication<Application>().filesDir, "media-operation-$operationId.log").absolutePath
-                val detailedLog = withContext(Dispatchers.IO) {
-                    runCatching { File(logPath).takeIf { it.isFile }?.readText().orEmpty() }.getOrDefault("")
-                }
-                val firstItemError = detailedLog.lineSequence()
-                    .firstOrNull { it.contains("[FAIL]") }
-                    ?.substringAfter("[FAIL]")?.trim()
-
-                val verb = if (type == MediaFileOperationWorker.TYPE_MOVE) "Moved" else "Copied"
-                val message = if (failed == 0 && succeeded > 0) {
-                    "$verb ${succeeded} item${if (succeeded == 1) "" else "s"} to ${destinationAlbum.name}"
-                } else if (succeeded == 0 && errorMessage != null) {
-                    "$verb failed: $errorMessage"
-                } else if (succeeded == 0 && firstItemError != null) {
-                    "$verb failed: $firstItemError"
-                } else {
-                    "$verb ${succeeded} of ${uniqueSources.size}; ${failed} failed"
-                }
-                _fileOperationMessages.emit(message)
-
+                // Worker output and its durable operation log are consumed by the
+                // persistent dialog. This coroutine only waits for completion so
+                // the UI state remains anchored to this operation ID.
+                finishedWork.outputData
             } catch (exception: CancellationException) {
                 throw exception
             } catch (exception: Exception) {
