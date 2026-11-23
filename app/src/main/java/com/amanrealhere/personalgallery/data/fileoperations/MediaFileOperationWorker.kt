@@ -325,11 +325,12 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
         }
 
         val reconciliationSuffix = if (reconciliationFailures == 0) "" else " · $reconciliationFailures album refresh failure(s)"
-        val methodCounts = (0 until completed.length()).map { completed.getJSONObject(completed.keys().asSequence().toList()[it]).optString("method") }
+        val methodCounts = completed.keys().asSequence().map { completed.optJSONObject(it)?.optString("method").orEmpty() }.toList()
         val copyCount = methodCounts.count { it == "copy" }
         val atomicMoveCount = methodCounts.count { it == "atomic-rename" }
         val fallbackMoveCount = methodCounts.count { it == "copy-delete" }
-        val methodSummary = if (type == TYPE_MOVE) "$atomicMoveCount atomic rename(s) · $fallbackMoveCount copy-and-delete move(s)" else "$copyCount copied"
+        val recoveredMoveCount = methodCounts.count { it == "recovered" || it == "unknown-move" }
+        val methodSummary = if (type == TYPE_MOVE) "$atomicMoveCount atomic rename(s) · $fallbackMoveCount copy-and-delete move(s) · $recoveredMoveCount recovered move(s)" else "$copyCount copied"
         val verificationSummary = "$succeeded file(s) verified (name, size, mtime-to-seconds)"
         val summary = "$succeeded succeeded, $failed failed, $processed of $total processed · $methodSummary · $verificationSummary$reconciliationSuffix"
         log("SUMMARY", summary)
