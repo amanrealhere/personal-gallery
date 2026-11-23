@@ -212,9 +212,16 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
             KEY_PROCESSED to processed, KEY_TOTAL to total,
             KEY_SUCCEEDED to succeeded, KEY_FAILED to failed,
             KEY_CURRENT to safeCurrent, KEY_STATUS to status.take(240),
-            KEY_LOG_PATH to operationLog.absolutePath
+            KEY_LOG_PATH to operationLog.absolutePath,
+            KEY_LOG_PREVIEW to logPreview()
         ))
         setForeground(createForegroundInfo(currentType, processed, total, "$status · $safeCurrent"))
+    }
+
+    private fun logPreview(): String = try {
+        operationLog.readLines().takeLast(8).joinToString("\\n").takeLast(1800)
+    } catch (_: Exception) {
+        "Detailed operation log is being written."
     }
 
     private fun log(tag: String, message: String) {
@@ -288,6 +295,7 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
         const val KEY_ERROR = "error"
         const val KEY_STATUS = "status"
         const val KEY_LOG_PATH = "log_path"
+        const val KEY_LOG_PREVIEW = "log_preview"
         const val TYPE_COPY = "COPY"
         const val TYPE_MOVE = "MOVE"
         const val TAG = "personal-gallery-file-operation"
