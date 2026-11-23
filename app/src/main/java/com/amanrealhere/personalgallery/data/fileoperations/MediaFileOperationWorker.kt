@@ -259,14 +259,9 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
             }
             log("VERIFY", "Temporary mtime verified to seconds: ${temporary.lastModified()/1000L}")
             val expectedDestinationName = File(destinationPath).name
-            try {
-                Files.move(temporary.toPath(), destination.toPath(), StandardCopyOption.ATOMIC_MOVE)
-                log("PUBLISH", "Temporary file published atomically")
-            } catch (_: AtomicMoveNotSupportedException) {
-                Files.move(temporary.toPath(), destination.toPath())
-                log("PUBLISH", "Atomic publication unsupported; used filesystem move")
-            }
-            if (!verifyDestination(destination, expectedDestinationName, expectedSize, expectedMtimeSeconds)) {
+            Files.move(temporary.toPath(), destination.toPath())
+            log("PUBLISH", "Temporary file published using same-directory filesystem move")
+            if (!verifyDestination(destination, expectedDestinationName, expectedSize, expectedMtimeSeconds) {
                 throw IllegalStateException("Published destination verification failed")
             }
             log("VERIFY", "Published destination verified: name=${destination.name}; size=${destination.length()}; mtime(s)= ${destination.lastModified()/1000L}")
