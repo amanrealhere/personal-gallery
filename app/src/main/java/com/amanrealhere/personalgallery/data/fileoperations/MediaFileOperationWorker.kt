@@ -22,6 +22,7 @@ import org.json.JSONObject
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
+import java.io.IOException
 import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.Files
 import java.nio.file.FileSystemException
@@ -314,6 +315,9 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
         } catch (e: FileSystemException) {
             if (!isCrossDeviceOrAtomicUnsupported(e) && !differentStorageVolumes(source, destinationDirectory)) throw e
             log("FALLBACK", "Atomic rename unavailable for these filesystems; using copy-and-delete: ${e.message}")
+        } catch (e: IOException) {
+            if (!differentStorageVolumes(source, destinationDirectory)) throw e
+            log("FALLBACK", "Atomic rename failed across storage volumes; using copy-and-delete: ${e.message}")
         }
 
         publishProgress(processed, total, succeeded, failed, source.name, "Copying before deleting source")
