@@ -78,6 +78,7 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
         var failed = 0
         val briefErrors = mutableListOf<String>()
         log("START", "$type · $total files · Destination: ${destinationDirectory.absolutePath}")
+        cleanupAbandonedTemporaryFiles(destinationDirectory)
         setForeground(createForegroundInfo(type, 0, total, "Preparing · $total files"))
 
         for (index in 0 until total) {
@@ -356,6 +357,20 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
     private fun log(tag: String, message: String) {
         val timestamp = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US).format(java.util.Date())
         operationLog.appendText("[$timestamp] [$tag] $message\n")
+    }
+
+    private fun cleanupAbandonedTemporaryFiles(directory: File) {
+        val prefix = ".personal-gallery-"
+        val leftovers = directory.listFiles()?.filter {
+            it.isFile && it.name.startsWith(prefix) && it.name.endsWith(".tmp")
+        }.orEmpty()
+        if (leftovers.isEmpty()) return
+        var deleted = 0
+        for (file in leftovers) {
+            if (file.delete() || !file.exists()) deleted++
+            else log("CLEANUP", "Could not remove abandoned temporary file: ${file.name}")
+        }
+        log("CLEANUP", "Removed $deleted abandoned temporary file(s) from destination")
     }
 
     private fun uniqueDestination(directory: File, originalName: String): File {
