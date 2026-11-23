@@ -100,6 +100,7 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
                         .put("destination", uniqueDestination(destinationDirectory, source.name).absolutePath)
                         .put("size", expectedSize)
                         .put("mtimeSeconds", expectedMtimeSeconds)
+                        .put("started", false)
                     plans.put(sourcePath, plan)
                     persistState()
                     log("PLAN", "Reserved destination ${plan.getString("destination")} · size=$expectedSize · mtime(s)=$expectedMtimeSeconds")
@@ -130,7 +131,8 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
                 // Recover a file published before the worker was interrupted before
                 // it could persist its completion record. The destination was
                 // planned and persisted before the file operation began.
-                if (destination.exists() && verifyDestination(destination, destination.name, expectedSize, expectedMtimeSeconds)) {
+                if (plan.optBoolean("started", false) && destination.exists() &&
+                    verifyDestination(destination, destination.name, expectedSize, expectedMtimeSeconds)) {
                     if (type == TYPE_MOVE && source.exists()) {
                         if (source.length() != expectedSize || source.lastModified() / 1000L != expectedMtimeSeconds) {
                             throw IllegalStateException("Source changed since the operation was planned; source retained during recovery")
@@ -151,6 +153,10 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
                     persistState()
                 }
 
+                plan.put("started", true)
+                plans.put(sourcePath, plan)
+                persistState()
+                log("PLAN", "Execution marked started and plan persisted for ${source.name}")
                 val result = if (type == TYPE_MOVE) {
                     moveOne(source, destinationDirectory, plan.getString("destination"), expectedSize, expectedMtimeSeconds, index, total, succeeded, failed)
                 } else {
