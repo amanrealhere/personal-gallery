@@ -61,12 +61,14 @@ class GalleryViewModel(
     fun startFileOperation(type: String, sourcePaths: List<String>, destinationAlbum: Album) {
         val uniqueSources = sourcePaths.distinct()
         if (uniqueSources.isEmpty()) return
-        indexingJob?.cancel()
+        val scanToStop = indexingJob
+        scanToStop?.cancel()
         indexingJob = null
         indexingAlbumId = null
         _isIndexingAlbum.value = false
         viewModelScope.launch {
             try {
+                scanToStop?.join()
                 val operationId = withContext(Dispatchers.IO) {
                     MediaFileOperationScheduler.enqueue(
                         getApplication(),
