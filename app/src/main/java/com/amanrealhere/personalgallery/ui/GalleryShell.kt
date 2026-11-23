@@ -3,6 +3,7 @@ package com.amanrealhere.personalgallery.ui
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
+import android.os.SystemClock
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -147,7 +148,7 @@ fun GalleryShell(viewModel: GalleryViewModel) {
     val fileOperationProgressUnits = displayedFileOperation?.progress?.getInt(MediaFileOperationWorker.KEY_PROGRESS_UNITS, fileOperationProcessed * 1000)
         ?: displayedFileOperation?.outputData?.getInt(MediaFileOperationWorker.KEY_PROGRESS_UNITS, fileOperationProcessed * 1000)
         ?: savedOperationResult.optInt(MediaFileOperationWorker.KEY_PROGRESS_UNITS, fileOperationProcessed * 1000)
-    val operationStartedAtMillis = savedOperationState.optLong("startedAtMillis", 0L)
+    val operationStartedAtElapsedRealtime = savedOperationState.optLong("startedElapsedRealtime", 0L)
     val operationDurationMs = savedOperationResult.optLong("durationMs", -1L)
     val fileOperationStatus = if (displayedFileOperation?.state?.isFinished == true) {
         displayedFileOperation.outputData.getString(MediaFileOperationWorker.KEY_SUMMARY)
@@ -413,8 +414,8 @@ fun GalleryShell(viewModel: GalleryViewModel) {
                     val totalUnits = fileOperationTotal.coerceAtLeast(1) * 1000
                     val progressFraction = (fileOperationProgressUnits.toFloat() / totalUnits).coerceIn(0f, 1f)
                     val progressPercent = (progressFraction * 100f).toInt()
-                    val startTime = operationStartedAtMillis.takeIf { it > 0L } ?: 0L
-                    var stopwatchNow by remember(latestFileOperationId) { mutableStateOf(System.currentTimeMillis()) }
+                    val startTime = operationStartedAtElapsedRealtime.takeIf { it > 0L } ?: 0L
+                    var stopwatchNow by remember(latestFileOperationId) { mutableStateOf(SystemClock.elapsedRealtime()) }
                     var frozenElapsed by remember(latestFileOperationId) { mutableStateOf<Long?>(null) }
                     LaunchedEffect(workState, startTime, operationDurationMs) {
                         if (operationFinished) {
@@ -423,7 +424,7 @@ fun GalleryShell(viewModel: GalleryViewModel) {
                         } else if (operationRunning) {
                             frozenElapsed = null
                             while (true) {
-                                stopwatchNow = System.currentTimeMillis()
+                                stopwatchNow = SystemClock.elapsedRealtime()
                                 delay(32)
                             }
                         }
