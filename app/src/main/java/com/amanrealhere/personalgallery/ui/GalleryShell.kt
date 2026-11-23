@@ -125,8 +125,8 @@ fun GalleryShell(viewModel: GalleryViewModel) {
         ?: latestFileOperationId?.let { id -> fileOperationWorkInfos.firstOrNull { it.id.toString() == id } }
     var savedOperationState by remember { mutableStateOf(JSONObject()) }
     var savedOperationResult by remember { mutableStateOf(JSONObject()) }
-    LaunchedEffect(latestFileOperationId, displayedFileOperation?.state) {
-        val id = latestFileOperationId
+    LaunchedEffect(latestFileOperationId, displayedFileOperation?.id, displayedFileOperation?.state) {
+        val id = displayedFileOperation?.id?.toString() ?: latestFileOperationId
         savedOperationState = if (id == null) JSONObject() else withContext(Dispatchers.IO) {
             val stateFile = File(context.filesDir, "media-operation-" + id + ".state.json")
             runCatching { JSONObject(stateFile.readText()) }.getOrElse { JSONObject() }
@@ -167,22 +167,23 @@ fun GalleryShell(viewModel: GalleryViewModel) {
         launch { viewModel.fileOperationMessages.collect { operationLaunchError = it; Toast.makeText(context, "Could not queue operation", Toast.LENGTH_SHORT).show() } }
     }
     LaunchedEffect(fileOperationWorkInfos, pendingToastOperationIds) {
-        for (work in fileOperationWorkInfos.filter { it.state.isFinished }) {
-            val id = work.id.toString()
-            if (id !in pendingToastOperationIds) continue
-            pendingToastOperationIds = pendingToastOperationIds - id
-            val type = work.outputData.getString(MediaFileOperationWorker.KEY_TYPE)
-                ?: work.inputData.getString(MediaFileOperationWorker.KEY_TYPE)
-            val action = if (type == MediaFileOperationWorker.TYPE_MOVE) "Move" else "Copy"
-            val failedCount = work.outputData.getInt(MediaFileOperationWorker.KEY_FAILED, 0)
-            val summary = work.outputData.getString(MediaFileOperationWorker.KEY_SUMMARY).orEmpty()
-            val message = when (work.state) {
-                WorkInfo.State.FAILED -> action + " failed"
-                WorkInfo.State.CANCELLED -> action + " cancelled"
-                WorkInfo.State.SUCCEEDED -> if (failedCount > 0 || summary.contains("album refresh failure", true)) action + " finished with errors" else action + " completed"
-                else -> continue
+        val completedToasts = fileOperationWorkInfos.filter { it.state.isFinished && it.id.toString() in pendingToastOperationIds }
+        if (completedToasts.isNotEmpty()) {
+            pendingToastOperationIds = pendingToastOperationIds - completedToasts.map { it.id.toString() }.toSet()
+            completedToasts.forEach { work ->
+                val type = work.outputData.getString(MediaFileOperationWorker.KEY_TYPE)
+                    ?: work.inputData.getString(MediaFileOperationWorker.KEY_TYPE)
+                val action = if (type == MediaFileOperationWorker.TYPE_MOVE) "Move" else "Copy"
+                val failedCount = work.outputData.getInt(MediaFileOperationWorker.KEY_FAILED, 0)
+                val summary = work.outputData.getString(MediaFileOperationWorker.KEY_SUMMARY).orEmpty()
+                val message = when (work.state) {
+                    WorkInfo.State.FAILED -> action + " failed"
+                    WorkInfo.State.CANCELLED -> action + " cancelled"
+                    WorkInfo.State.SUCCEEDED -> if (failedCount > 0 || summary.contains("album refresh failure", true)) action + " finished with errors" else action + " completed"
+                    else -> return@forEach
+                }
+                Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
             }
-            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
         }
     }
     LaunchedEffect(latestFileOperationId) {
