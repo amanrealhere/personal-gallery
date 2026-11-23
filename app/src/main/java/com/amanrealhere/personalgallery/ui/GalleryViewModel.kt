@@ -51,8 +51,8 @@ class GalleryViewModel(
 
     private val _fileOperationMessages = MutableSharedFlow<String>(extraBufferCapacity = 4)
     val fileOperationMessages = _fileOperationMessages.asSharedFlow()
-    private val _fileOperationStartedIds = MutableSharedFlow<String>(extraBufferCapacity = 8)
-    val fileOperationStartedIds = _fileOperationStartedIds.asSharedFlow()
+    private val fileOperationStartedIdsChannel = kotlinx.coroutines.channels.Channel<String>(kotlinx.coroutines.channels.Channel.BUFFERED)
+    val fileOperationStartedIds = fileOperationStartedIdsChannel.receiveAsFlow()
 
     private val operationPreferences = application.getSharedPreferences("file-operation-ui", Application.MODE_PRIVATE)
     private val _latestFileOperationId = MutableStateFlow<String?>(
@@ -81,7 +81,7 @@ class GalleryViewModel(
                 }
                 _latestFileOperationId.value = operationId
                 operationPreferences.edit().putString("latest_operation_id", operationId).apply()
-                _fileOperationStartedIds.emit(operationId)
+                fileOperationStartedIdsChannel.send(operationId)
             } catch (exception: CancellationException) {
                 throw exception
             } catch (exception: Exception) {
