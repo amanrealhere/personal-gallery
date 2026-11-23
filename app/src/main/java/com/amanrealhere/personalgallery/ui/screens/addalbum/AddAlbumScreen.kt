@@ -411,6 +411,9 @@ private fun validationMessage(
         FolderValidationResult.InvalidPath ->
             "The folder path could not be resolved."
 
+        FolderValidationResult.AppStorageDirectory ->
+            "Personal Gallery's own storage folder cannot be registered as an album."
+
         is FolderValidationResult.Valid ->
             ""
     }
