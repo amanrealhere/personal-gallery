@@ -234,6 +234,7 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
                     moveOne(source, destinationDirectory, plan.getString("destination"), expectedSize, expectedMtimeSeconds, sourcePath, plan, index, total, succeeded, failed)
                 } else {
                     copyOne(source, destinationDirectory, plan.getString("destination"), expectedSize, expectedMtimeSeconds, sourcePath, plan, processed, total, succeeded, failed)
+                    true
                 }
                 if (result) {
                     val finalDestination = File(plan.getString("destination"))
@@ -542,7 +543,7 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
         return sourceRoot != null && destinationRoot != null && sourceRoot != destinationRoot
     }
 
-    private fun publishProgress(processed: Int, total: Int, succeeded: Int, failed: Int, current: String, status: String) {
+    private suspend fun publishProgress(processed: Int, total: Int, succeeded: Int, failed: Int, current: String, status: String) {
         setProgress(workDataOf(
             KEY_PROCESSED to processed, KEY_TOTAL to total,
             KEY_SUCCEEDED to succeeded, KEY_FAILED to failed,
