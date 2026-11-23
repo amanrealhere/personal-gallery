@@ -118,6 +118,7 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
         operationStartedAtMillis = persistedElapsedStart.takeIf { it > 0L && SystemClock.elapsedRealtime() >= it } ?: SystemClock.elapsedRealtime()
         operationState.put("startedElapsedRealtime", operationStartedAtMillis)
         operationState.put("startedAtMillis", System.currentTimeMillis())
+        ensureOperationNotificationIds()
         persistState()
 
         val total = sourcePaths.length()
@@ -681,12 +682,31 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
         applicationContext.getSystemService(NotificationManager::class.java).notify(operationNotificationId(true), notification)
     }
 
+    private fun ensureOperationNotificationIds() {
+        val existingProgress = operationState.optInt("progressNotificationId", 0)
+        val existingCompletion = operationState.optInt("completionNotificationId", 0)
+        if (existingProgress > 0 && existingCompletion > 0 && existingProgress != existingCompletion) return
+        val progressId = allocateUniqueNotificationId()
+        val completionId = allocateUniqueNotificationId(setOf(progressId))
+        operationState.put("progressNotificationId", progressId)
+        operationState.put("completionNotificationId", completionId)
+    }
+
     private fun operationNotificationId(completion: Boolean): Int {
-        val base = currentOperationId.takeLast(8).toLongOrNull(16)?.toInt()
-            ?: currentOperationId.hashCode()
-        val salt = if (completion) 0x2468ACE0 else 0x13579BDF
-        val id = (base xor salt) and 0x7fffffff
-        return if (id == 0) 1 else id
+        val key = if (completion) "completionNotificationId" else "progressNotificationId"
+        val saved = operationState.optInt(key, 0)
+        return if (saved > 0) saved else allocateUniqueNotificationId()
+    }
+
+    private fun allocateUniqueNotificationId(excluded: Set<Int> = emptySet()): Int {
+        val manager = applicationContext.getSystemService(NotificationManager::class.java)
+        val activeIds = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) manager.activeNotifications.map { it.id }.toSet() else emptySet()
+        val used = activeIds + excluded
+        var candidate: Int
+        do {
+            candidate = (UUID.randomUUID().hashCode() and 0x7fffffff)
+        } while (candidate == 0 || candidate in used)
+        return candidate
     }
 
     private fun createChannel() {
