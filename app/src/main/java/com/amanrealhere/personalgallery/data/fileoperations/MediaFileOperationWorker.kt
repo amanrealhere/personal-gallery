@@ -654,7 +654,7 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
             .setContentTitle(title)
             .setContentText(compactText)
             .setStyle(NotificationCompat.BigTextStyle().bigText(summary))
-            .setCategory(NotificationCompat.CATEGORY_STATUS
+            .setCategory(NotificationCompat.CATEGORY_STATUS)
             .setContentIntent(contentIntent)
             .setProgress(0, 0, false)
             .setAutoCancel(false)
