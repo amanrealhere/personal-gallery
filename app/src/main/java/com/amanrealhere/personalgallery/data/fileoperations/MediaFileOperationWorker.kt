@@ -225,6 +225,14 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
             val destinationAlbum = registeredAlbums.firstOrNull {
                 runCatching { File(it.canonicalPath).canonicalPath == destinationDirectory.canonicalPath }.getOrDefault(false)
             }
+            if (sourceAlbums.isEmpty()) {
+                reconciliationFailures++
+                log("RECONCILE_FAIL", "No registered source album matched the affected source paths")
+            }
+            if (destinationAlbum == null) {
+                reconciliationFailures++
+                log("RECONCILE_FAIL", "Destination album could not be matched to a registered album")
+            }
             val affectedAlbums = (sourceAlbums + listOfNotNull(destinationAlbum)).distinctBy { it.id }
             log("RECONCILE", "Refreshing index and thumbnail work for ${affectedAlbums.size} affected album(s)")
             publishProgress(processed, total, succeeded, failed, "Album index", "Refreshing affected album indexes and thumbnails")
@@ -232,7 +240,18 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
                 try {
                     log("RECONCILE", "Album refresh started: ${album.name}")
                     publishProgress(processed, total, succeeded, failed, album.name, "Refreshing album index and thumbnails")
-                    MediaIndexRepository(app.database.mediaItemDao()).reconcileAlbum(album.id, File(album.canonicalPath))
+                    val scanResult = MediaIndexRepository(app.database.mediaItemDao())
+                        .reconcileAlbum(album.id, File(album.canonicalPath))
+                    when (scanResult) {
+                        MediaIndexRepository.ScanResult.Unavailable ->
+                            throw IllegalStateException("Album scan unavailable; index refresh was not completed")
+                        is MediaIndexRepository.ScanResult.Completed -> {
+                            if (!scanResult.complete) {
+                                throw IllegalStateException("Album scan was incomplete (${scanResult.indexedCount} discovered); stale rows were retained")
+                            }
+                            log("RECONCILE", "Album index refresh completed: ${scanResult.indexedCount} image(s)")
+                        }
+                    }
                     ThumbnailWorkScheduler.enqueueAlbum(applicationContext, album.id, force = false)
                     log("RECONCILE", "Album refresh and thumbnail scheduling succeeded: ${album.name}")
                 } catch (exception: CancellationException) {
