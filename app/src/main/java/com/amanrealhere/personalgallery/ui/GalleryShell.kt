@@ -86,9 +86,9 @@ private fun OperationLogView(text: String) {
             val tag = Regex("\\[(.*?)\\]").findAll(line).lastOrNull()?.groupValues?.getOrNull(1).orEmpty()
             val lineColor = when (tag) {
                 "ERROR", "FAIL", "RECONCILE_FAIL", "INTERRUPTED" -> scheme.error
-                "SUCCESS", "SUMMARY" -> successColor
+                "SUCCESS", "SUMMARY", "METHOD", "PUBLISH" -> successColor
                 "FALLBACK", "RETRY" -> warningColor
-                "VERIFY", "METHOD", "PUBLISH", "STATE" -> scheme.primary
+                "VERIFY", "STATE" -> scheme.primary
                 else -> scheme.onSurfaceVariant
             }
             Text(line, color = lineColor, style = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 11.sp, lineHeight = 14.sp))
