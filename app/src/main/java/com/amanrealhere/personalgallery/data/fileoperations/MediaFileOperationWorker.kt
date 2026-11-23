@@ -109,6 +109,7 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
                         .put("size", expectedSize)
                         .put("mtimeSeconds", expectedMtimeSeconds)
                         .put("started", false)
+                        .put("sourcePresent", source.isFile)
                         .put("phase", "planned")
                     plans.put(sourcePath, plan)
                     persistState()
