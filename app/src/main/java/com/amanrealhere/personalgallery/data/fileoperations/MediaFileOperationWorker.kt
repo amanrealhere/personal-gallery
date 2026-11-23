@@ -290,7 +290,7 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
                 log("RETRY", "Retrying durable album reconciliation (attempt ${reconciliationAttempt} of 3; independent of interrupted file-operation retries)")
                 return@withContext Result.retry()
             }
-            log("RECONCILE_FAIL", "Reconciliation retry limit reached; pending refresh is reported in the operation summary")
+            log("RECONCILE_FAIL", "Reconciliation retry limit reached; automatic retries are no longer scheduled and the refresh failure remains in the log")
         }
         requestFile.delete()
         postCompletionNotification(type, summary)
