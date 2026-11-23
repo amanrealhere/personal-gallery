@@ -57,29 +57,39 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
         stateFile = File(applicationContext.filesDir, "media-operation-$operationId.state.json")
         val requestFile = File(applicationContext.filesDir, "media-operation-$operationId.json")
         if (!requestFile.isFile) {
-            log("ERROR", "Request file missing. Persistent log: ${operationLog.name}")
-            return@withContext Result.failure()
+            val message = "Operation failed: request file is missing; no files were processed"
+            log("ERROR", message)
+            postCompletionNotification(currentType, message)
+            return@withContext Result.failure(workDataOf(KEY_ERROR to message))
         }
 
         val request = try { JSONObject(requestFile.readText()) } catch (e: Exception) {
-            log("ERROR", "Request file could not be read: ${e.message}")
-            return@withContext Result.failure(workDataOf(KEY_ERROR to "Request file could not be read"))
+            val message = "Operation failed: request file could not be read; no files were processed"
+            log("ERROR", message + ": " + e.message)
+            requestFile.delete()
+            postCompletionNotification(currentType, message)
+            return@withContext Result.failure(workDataOf(KEY_ERROR to message))
         }
         currentType = request.optString("type", TYPE_COPY)
         val type = currentType
         val destinationDirectory = File(request.optString("destination"))
         val sourcePaths = request.optJSONArray("sources") ?: JSONArray()
         if (!destinationDirectory.isDirectory || !destinationDirectory.canWrite()) {
-            log("ERROR", "Destination is unavailable: ${destinationDirectory.absolutePath}")
-            return@withContext Result.failure(workDataOf(KEY_ERROR to "Destination album is unavailable"))
+            val message = "Operation failed: destination album is unavailable"
+            log("ERROR", message + ": " + destinationDirectory.absolutePath)
+            requestFile.delete()
+            postCompletionNotification(type, message)
+            return@withContext Result.failure(workDataOf(KEY_ERROR to message))
         }
 
         operationState = if (stateFile.isFile) {
             try {
                 JSONObject(stateFile.readText())
             } catch (exception: Exception) {
-                log("ERROR", "Persistent operation state is unreadable; refusing to restart without recovery data: ${exception.message}")
-                return@withContext Result.failure(workDataOf(KEY_ERROR to "Operation state is unreadable; no files were processed in this attempt"))
+                val message = "Operation failed: persistent state is unreadable; no files were processed in this attempt"
+                log("ERROR", message + ": " + exception.message)
+                postCompletionNotification(type, message)
+                return@withContext Result.failure(workDataOf(KEY_ERROR to message))
             }
         } else JSONObject()
         plans = operationState.optJSONObject("plans") ?: JSONObject()
@@ -548,7 +558,7 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
 
     private fun postCompletionNotification(type: String, summary: String) {
         createChannel()
-        val title = if (type == TYPE_MOVE) "Move finished" else "Copy finished"
+        val title = if (summary.startsWith("Operation failed")) "File operation failed" else if (type == TYPE_MOVE) "Move finished" else "Copy finished"
         val notification = NotificationCompat.Builder(applicationContext, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_menu_gallery)
             .setContentTitle(title)
