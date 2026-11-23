@@ -19,6 +19,9 @@ import java.nio.file.attribute.BasicFileAttributes
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.ConcurrentHashMap
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /**
  * Builds a Room catalogue for a registered album.
@@ -36,6 +39,14 @@ class MediaIndexRepository(private val mediaItemDao: MediaItemDao) {
         albumId: String,
         folder: File,
         onProgress: (Int) -> Unit = {}
+    ): ScanResult = albumMutexes.getOrPut(albumId) { Mutex() }.withLock {
+        reconcileAlbumLocked(albumId, folder, onProgress)
+    }
+
+    private suspend fun reconcileAlbumLocked(
+        albumId: String,
+        folder: File,
+        onProgress: (Int) -> Unit
     ): ScanResult {
         val scanToken = UUID.randomUUID().toString()
         mediaItemDao.clearStaging(scanToken)
@@ -177,6 +188,7 @@ class MediaIndexRepository(private val mediaItemDao: MediaItemDao) {
     }
 
     companion object {
+        private val albumMutexes = ConcurrentHashMap<String, Mutex>()
         private const val BATCH_SIZE = 512
         private const val WORKER_COUNT = 4
         private const val DIRECTORY_QUEUE_CAPACITY = 256
