@@ -331,6 +331,15 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
             }
             log("RECONCILE_FAIL", "Reconciliation retry limit reached; automatic retries are no longer scheduled and the refresh failure remains in the log")
         }
+        operationState.put("result", JSONObject()
+            .put("type", type)
+            .put("summary", summary)
+            .put("processed", processed)
+            .put("total", total)
+            .put("succeeded", succeeded)
+            .put("failed", failed)
+            .put("status", "COMPLETED"))
+        persistState()
         requestFile.delete()
         postCompletionNotification(type, summary)
         // WorkManager Data remains bounded. Full details are retained in the
