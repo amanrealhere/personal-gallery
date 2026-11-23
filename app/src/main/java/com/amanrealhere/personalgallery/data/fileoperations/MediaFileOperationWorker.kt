@@ -149,6 +149,7 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
                 if (destination.exists()) {
                     log("PLAN", "Planned destination is occupied by a different file; reserving a new collision-safe name")
                     plan.put("destination", uniqueDestination(destinationDirectory, source.name).absolutePath)
+                    plan.put("started", false)
                     plans.put(sourcePath, plan)
                     persistState()
                 }
