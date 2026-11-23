@@ -110,6 +110,8 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
         } else JSONObject()
         plans = operationState.optJSONObject("plans") ?: JSONObject()
         completed = operationState.optJSONObject("completed") ?: JSONObject()
+        operationStartedAtMillis = operationState.optLong("startedAtMillis", 0L).takeIf { it > 0L } ?: System.currentTimeMillis()
+        operationState.put("startedAtMillis", operationStartedAtMillis)
         persistState()
 
         val total = sourcePaths.length()
@@ -118,14 +120,14 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
         var failed = 0
         log("START", "$type · $total files · Destination: ${destinationDirectory.absolutePath}")
         cleanupAbandonedTemporaryFiles(destinationDirectory)
-        setForeground(createForegroundInfo(type, 0, total, "Preparing · $total files"))
+        setForeground(createForegroundInfo(type, 0, total, 0, "Preparing $total items", "Getting things ready"))
 
         for (index in 0 until total) {
             if (isStopped) break
             val sourcePath = sourcePaths.optString(index)
             val source = File(sourcePath)
             val action = if (type == TYPE_MOVE) "Move" else "Copy"
-            publishProgress(processed, total, succeeded, failed, source.name, "Preparing $action")
+            publishProgress(processed, total, succeeded, failed, source.name, "Preparing $action", 0, "Checking source and destination")
             log("FILE", "$action started: ${source.absolutePath}")
             if (galleryOwnedRoot != null) {
                 val sourceCanonical = runCatching { source.canonicalPath }.getOrNull()
@@ -338,7 +340,9 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
             .put("total", total)
             .put("succeeded", succeeded)
             .put("failed", failed)
-            .put("status", "COMPLETED"))
+            .put("status", "COMPLETED")
+            .put("finishedAtMillis", System.currentTimeMillis())
+            .put("durationMs", (System.currentTimeMillis() - operationStartedAtMillis).coerceAtLeast(0L)))
         persistState()
         requestFile.delete()
         postCompletionNotification(type, summary)
@@ -347,7 +351,7 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
         Result.success(workDataOf(
             KEY_PROCESSED to processed, KEY_TOTAL to total,
             KEY_SUCCEEDED to succeeded, KEY_FAILED to failed,
-            KEY_SUMMARY to summary, KEY_LOG_PATH to operationLog.absolutePath
+            KEY_SUMMARY to summary, KEY_TYPE to type, KEY_PROGRESS_UNITS to total * 1000
         ))
     }
 
@@ -368,6 +372,7 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
         val destination = File(destinationPath)
         val temporary = File(destinationDirectory, ".personal-gallery-$currentOperationId-${UUID.randomUUID()}.tmp")
         log("COPY", "Copying to temporary file: ${temporary.name}; expected name=${destination.name}; size=$expectedSize; mtime(s)=$expectedMtimeSeconds")
+        publishProgress(processed, total, succeeded, failed, source.name, "Copying", 0, "Writing temporary copy")
         try {
             FileInputStream(source).use { input ->
                 FileOutputStream(temporary).use { output ->
@@ -384,18 +389,22 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
                         val now = System.currentTimeMillis()
                         if (now - lastProgressAt >= 1_000L || copied == expectedSize) {
                             log("PROGRESS", "Copied " + copied + " / " + expectedSize + " bytes for " + source.name)
-                            publishProgress(processed, total, succeeded, failed, source.name, "Copying " + source.name + " · " + copied + " / " + expectedSize + " bytes")
+                            val filePercent = if (expectedSize > 0L) ((copied * 100L) / expectedSize).coerceIn(0L, 100L).toInt() else 0
+                            val fileProgress = if (expectedSize > 0L) ((copied * 1000L) / expectedSize).coerceIn(0L, 999L).toInt() else 0
+                            publishProgress(processed, total, succeeded, failed, source.name, "Copying", fileProgress, "$filePercent% · writing temporary copy")
                             lastProgressAt = now
                         }
                     }
                     output.fd.sync()
                 }
             }
+            setForeground(createForegroundInfo(currentType, processed, total, processed * 1000, "Verifying " + source.name, "Checking size and source metadata"))
             if (temporary.length() != expectedSize) throw IllegalStateException("Temporary size verification failed (expected $expectedSize, got ${temporary.length()})")
             log("VERIFY", "Temporary size verified: ${temporary.length()} bytes")
             if (source.length() != expectedSize || source.lastModified() / 1000L != expectedMtimeSeconds) {
                 throw IllegalStateException("Source changed while copying (size/mtime-to-seconds)")
             }
+            setForeground(createForegroundInfo(currentType, processed, total, processed * 1000, "Restoring timestamp", "Applying original modified time"))
             if (!temporary.setLastModified(expectedMtimeSeconds * 1000L)) throw IllegalStateException("Could not set destination mtime")
             if (!verifyDestination(temporary, temporary.name, expectedSize, expectedMtimeSeconds)) {
                 throw IllegalStateException("Temporary file verification failed (size or mtime-to-seconds)")
@@ -405,6 +414,7 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
             plan.put("phase", "publishing")
             plans.put(sourcePath, plan)
             persistState()
+            setForeground(createForegroundInfo(currentType, processed, total, processed * 1000, "Finishing " + source.name, "Publishing verified copy"))
             log("STATE", "Publishing phase persisted before destination rename")
             Files.move(temporary.toPath(), destination.toPath())
             log("PUBLISH", "Temporary file published using same-directory filesystem move")
@@ -446,6 +456,7 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
             return false
         }
         log("MOVE", "Attempting atomic rename: ${source.name} → $expectedDestinationName")
+        setForeground(createForegroundInfo(TYPE_MOVE, processed, total, processed * 1000, "Moving " + source.name, "Trying atomic rename"))
         try {
             Files.move(source.toPath(), destination.toPath(), StandardCopyOption.ATOMIC_MOVE)
             val valid = verifyDestination(destination, expectedDestinationName, expectedSize, expectedMtimeSeconds) && !source.exists()
@@ -465,8 +476,8 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
             log("FALLBACK", "Atomic rename failed across storage volumes; using copy-and-delete: ${e.message}")
         }
 
-        publishProgress(processed, total, succeeded, failed, source.name, "Copying before deleting source")
-        setForeground(createForegroundInfo(TYPE_MOVE, processed, total, "Fallback copy · ${source.name}"))
+        publishProgress(processed, total, succeeded, failed, source.name, "Copying", 0, "Fallback · copy and verify before deleting")
+        setForeground(createForegroundInfo(TYPE_MOVE, processed, total, processed * 1000, "Copying " + source.name, "Fallback · copy and verify before deleting"))
         val copied = copyOne(source, destinationDirectory, destinationPath, expectedSize, expectedMtimeSeconds, sourcePath, plan, processed, total, succeeded, failed)
         if (!verifyDestination(copied, expectedDestinationName, expectedSize, expectedMtimeSeconds)) {
             throw IllegalStateException("Destination verification failed; original retained")
@@ -474,6 +485,7 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
         if (source.length() != expectedSize || source.lastModified() / 1000L != expectedMtimeSeconds) {
             throw IllegalStateException("Source changed before deletion; original retained")
         }
+        setForeground(createForegroundInfo(TYPE_MOVE, processed, total, processed * 1000, "Deleting original", "Destination verified · removing source"))
         log("DELETE", "Destination name/size/mtime verified; deleting original source")
         if (!source.delete() || source.exists()) throw IllegalStateException("Destination verified; original could not be deleted")
         log("METHOD", "Completed by copy, verification, and source deletion")
@@ -658,7 +670,9 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
         const val KEY_ERROR = "error"
         const val KEY_STATUS = "status"
         const val KEY_LOG_PATH = "log_path"
-        const val KEY_LOG_PREVIEW = "log_preview"
+        const val KEY_DETAIL = "detail"
+        const val KEY_PROGRESS_UNITS = "progress_units"
+        const val KEY_TYPE = "type"
         const val TYPE_COPY = "COPY"
         const val TYPE_MOVE = "MOVE"
         const val TAG = "personal-gallery-file-operation"
