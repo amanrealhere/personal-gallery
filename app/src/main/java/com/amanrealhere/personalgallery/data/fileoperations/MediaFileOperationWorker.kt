@@ -219,7 +219,7 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
     }
 
     private fun logPreview(): String = try {
-        operationLog.readLines().takeLast(8).joinToString("\\n").takeLast(1800)
+        operationLog.readLines().takeLast(8).joinToString("\n").takeLast(1800)
     } catch (_: Exception) {
         "Detailed operation log is being written."
     }
