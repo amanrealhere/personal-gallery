@@ -28,10 +28,19 @@ class MediaGridPagingAdapter(
     private var selectionMode = selectedPaths.isNotEmpty()
 
     fun updateSelection(paths: Set<String>, onToggle: (String) -> Unit) {
+        val previousMode = selectionMode
+        val changedPaths = selectedPaths xor paths
         selectedPaths = paths
         selectionMode = paths.isNotEmpty()
         onToggleSelection = onToggle
-        notifyDataSetChanged()
+        if (previousMode != selectionMode) {
+            notifyDataSetChanged()
+            return
+        }
+        if (changedPaths.isEmpty()) return
+        snapshot().items.forEachIndexed { index, item ->
+            if (item.sourcePath in changedPaths) notifyItemChanged(index)
+        }
     }
 
     override fun onCreateViewHolder(parent: android.view.ViewGroup, viewType: Int): MediaViewHolder =
