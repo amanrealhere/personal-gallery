@@ -109,6 +109,7 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
                         .put("size", expectedSize)
                         .put("mtimeSeconds", expectedMtimeSeconds)
                         .put("started", false)
+                        .put("phase", "planned")
                     plans.put(sourcePath, plan)
                     persistState()
                     log("PLAN", "Reserved destination ${plan.getString("destination")} · size=$expectedSize · mtime(s)=$expectedMtimeSeconds")
@@ -140,7 +141,8 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
                 // it could persist its completion record. The destination was
                 // planned and persisted before the file operation began.
                 if (plan.optBoolean("started", false) && destination.exists() &&
-                    verifyDestination(destination, destination.name, expectedSize, expectedMtimeSeconds)) {
+                    verifyDestination(destination, destination.name, expectedSize, expectedMtimeSeconds) &&
+                    plan.optString("phase") == "published") {
                     if (type == TYPE_MOVE && source.exists()) {
                         if (source.length() != expectedSize || source.lastModified() / 1000L != expectedMtimeSeconds) {
                             throw IllegalStateException("Source changed since the operation was planned; source retained during recovery")
@@ -158,18 +160,20 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
                     log("PLAN", "Planned destination is occupied by a different file; reserving a new collision-safe name")
                     plan.put("destination", uniqueDestination(destinationDirectory, source.name).absolutePath)
                     plan.put("started", false)
+                    plan.put("phase", "planned")
                     plans.put(sourcePath, plan)
                     persistState()
                 }
 
                 plan.put("started", true)
+                plan.put("phase", "started")
                 plans.put(sourcePath, plan)
                 persistState()
                 log("PLAN", "Execution marked started and plan persisted for ${source.name}")
                 val result = if (type == TYPE_MOVE) {
                     moveOne(source, destinationDirectory, plan.getString("destination"), expectedSize, expectedMtimeSeconds, index, total, succeeded, failed)
                 } else {
-                    copyOne(source, destinationDirectory, plan.getString("destination"), expectedSize, expectedMtimeSeconds)
+                    copyOne(source, destinationDirectory, plan.getString("destination"), expectedSize, expectedMtimeSeconds, sourcePath, plan)
                 }
                 if (result) {
                     val finalDestination = File(plan.getString("destination"))
@@ -257,7 +261,9 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
         destinationDirectory: File,
         destinationPath: String,
         expectedSize: Long,
-        expectedMtimeSeconds: Long
+        expectedMtimeSeconds: Long,
+        sourcePath: String,
+        plan: JSONObject
     ): File {
         if (!source.isFile || !source.canRead()) throw IllegalStateException("Source is unavailable")
         val destination = File(destinationPath)
@@ -287,6 +293,10 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
                 throw IllegalStateException("Published destination verification failed")
             }
             log("VERIFY", "Published destination verified: name=${destination.name}; size=${destination.length()}; mtime(s)= ${destination.lastModified()/1000L}")
+            plan.put("phase", "published")
+            plans.put(sourcePath, plan)
+            persistState()
+            log("STATE", "Published destination phase persisted for recovery")
             return destination
         } finally {
             if (temporary.exists()) temporary.delete()
@@ -336,7 +346,7 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
 
         publishProgress(processed, total, succeeded, failed, source.name, "Copying before deleting source")
         setForeground(createForegroundInfo(TYPE_MOVE, processed, total, "Fallback copy · ${source.name}"))
-        val copied = copyOne(source, destinationDirectory, destinationPath, expectedSize, expectedMtimeSeconds)
+        val copied = copyOne(source, destinationDirectory, destinationPath, expectedSize, expectedMtimeSeconds, source.absolutePath, plans.optJSONObject(source.absolutePath) ?: JSONObject())
         if (!verifyDestination(copied, expectedDestinationName, expectedSize, expectedMtimeSeconds)) {
             throw IllegalStateException("Destination verification failed; original retained")
         }
