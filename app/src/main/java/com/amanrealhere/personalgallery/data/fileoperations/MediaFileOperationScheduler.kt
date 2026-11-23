@@ -23,14 +23,20 @@ object MediaFileOperationScheduler {
             .put("sources", JSONArray(sources.distinct()))
         val requestFile = File(context.filesDir, "media-operation-$id.json")
         val temporaryRequest = File(context.filesDir, "media-operation-$id.json.tmp")
-        FileOutputStream(temporaryRequest).use { output ->
-            output.write(request.toString().toByteArray(Charsets.UTF_8))
-            output.fd.sync()
-        }
         try {
-            Files.move(temporaryRequest.toPath(), requestFile.toPath(), StandardCopyOption.ATOMIC_MOVE)
-        } catch (_: AtomicMoveNotSupportedException) {
-            Files.move(temporaryRequest.toPath(), requestFile.toPath())
+            FileOutputStream(temporaryRequest).use { output ->
+                output.write(request.toString().toByteArray(Charsets.UTF_8))
+                output.fd.sync()
+            }
+            try {
+                Files.move(temporaryRequest.toPath(), requestFile.toPath(), StandardCopyOption.ATOMIC_MOVE)
+            } catch (_: AtomicMoveNotSupportedException) {
+                Files.move(temporaryRequest.toPath(), requestFile.toPath())
+            }
+        } catch (exception: Exception) {
+            temporaryRequest.delete()
+            requestFile.delete()
+            throw exception
         }
 
         val work = OneTimeWorkRequestBuilder<MediaFileOperationWorker>()
