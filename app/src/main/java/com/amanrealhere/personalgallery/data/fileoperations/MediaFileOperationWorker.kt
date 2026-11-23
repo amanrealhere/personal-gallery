@@ -135,14 +135,13 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
             }
             log("VERIFY", "Temporary mtime verified to seconds: ${temporary.lastModified()/1000L}")
             Files.move(temporary.toPath(), destination.toPath())
-            if (destination.name != source.name && !destination.name.matches(Regex(".* \\(\\d+)\\.[^.]+")) && destination.name != source.name) {
-                // Collision suffix is permitted; destination name is verified against
-                // the actual reserved target name below.
-                log("VERIFY", "Collision suffix accepted: ${destination.name}")
+            val expectedDestinationName = destination.name
+            if (expectedDestinationName != source.name) {
+                log("VERIFY", "Collision suffix accepted: $expectedDestinationName")
             }
             if (!destination.isFile || destination.length() != originalSize ||
                 destination.lastModified() / 1000L != originalModifiedSeconds ||
-                destination.name != destination.name
+                destination.name != expectedDestinationName
             ) {
                 destination.delete()
                 throw IllegalStateException("Published destination verification failed")
@@ -203,7 +202,7 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
 
     private fun isCrossDeviceOrAtomicUnsupported(e: FileSystemException): Boolean {
         val reason = (e.reason ?: e.message ?: "").lowercase()
-        return listOf("cross-device", "exdev", "not same device", "atomic", "unsupported").any { it in reason }
+        return listOf("cross-device", "cross device", "exdev", "not same device", "atomic move not supported", "operation not supported").any { it in reason }
     }
 
     private fun publishProgress(processed: Int, total: Int, succeeded: Int, failed: Int, current: String, status: String) {
