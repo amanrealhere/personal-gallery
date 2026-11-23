@@ -475,7 +475,7 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
             .setOnlyAlertOnce(true)
             .setAutoCancel(false)
             .build()
-        return ForegroundInfo(operationNotificationId(), notification,
+        return ForegroundInfo(operationNotificationId(false), notification,
             android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
     }
 
@@ -490,11 +490,14 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
             .setAutoCancel(false)
             .setOngoing(false)
             .build()
-        applicationContext.getSystemService(NotificationManager::class.java).notify(operationNotificationId(), notification)
+        applicationContext.getSystemService(NotificationManager::class.java).notify(operationNotificationId(true), notification)
     }
 
-    private fun operationNotificationId(): Int {
-        val id = currentOperationId.takeLast(8).toLongOrNull(16)?.toInt()?.and(0x7fffffff) ?: currentOperationId.hashCode().and(0x7fffffff)
+    private fun operationNotificationId(completion: Boolean): Int {
+        val base = currentOperationId.takeLast(8).toLongOrNull(16)?.toInt()
+            ?: currentOperationId.hashCode()
+        val salt = if (completion) 0x2468ACE0 else 0x13579BDF
+        val id = (base xor salt) and 0x7fffffff
         return if (id == 0) 1 else id
     }
 
