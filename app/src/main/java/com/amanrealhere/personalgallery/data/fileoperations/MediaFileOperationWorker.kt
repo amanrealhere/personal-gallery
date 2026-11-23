@@ -269,7 +269,8 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
         }
 
         val reconciliationSuffix = if (reconciliationFailures == 0) "" else " · $reconciliationFailures album refresh failure(s)"
-        val summary = "$succeeded succeeded, $failed failed, $processed of $total processed$reconciliationSuffix"
+        val verificationSummary = "$succeeded file(s) passed filename, size, and mtime-to-seconds verification"
+        val summary = "$succeeded succeeded, $failed failed, $processed of $total processed · $verificationSummary$reconciliationSuffix"
         log("SUMMARY", summary)
         if (reconciliationFailures > 0 && runAttemptCount < 2) {
             log("RETRY", "Retrying durable album reconciliation (attempt ${runAttemptCount + 1})")
