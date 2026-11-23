@@ -23,6 +23,8 @@ sealed interface FolderValidationResult {
     data object NotReadable : FolderValidationResult
 
     data object InvalidPath : FolderValidationResult
+
+    data object AppStorageDirectory : FolderValidationResult
 }
 
 class AlbumFolderValidator {
@@ -46,8 +48,17 @@ class AlbumFolderValidator {
 
         return try {
             val canonicalFolder = requestedFolder.canonicalFile
+            val appStorageRoot = File(
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES),
+                ".personal-gallery"
+            ).canonicalFile
+            val appStoragePrefix = appStorageRoot.path.trimEnd(File.separatorChar) + File.separator
 
             when {
+                canonicalFolder.path == appStorageRoot.path ||
+                    canonicalFolder.path.startsWith(appStoragePrefix) ->
+                    FolderValidationResult.AppStorageDirectory
+
                 !canonicalFolder.exists() ->
                     FolderValidationResult.DoesNotExist
 
