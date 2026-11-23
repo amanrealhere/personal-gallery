@@ -140,9 +140,11 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
                 // Recover a file published before the worker was interrupted before
                 // it could persist its completion record. The destination was
                 // planned and persisted before the file operation began.
+                val recoverablePublishedFile = plan.optString("phase") == "published" ||
+                    (type == TYPE_MOVE && !source.exists())
                 if (plan.optBoolean("started", false) && destination.exists() &&
                     verifyDestination(destination, destination.name, expectedSize, expectedMtimeSeconds) &&
-                    plan.optString("phase") == "published") {
+                    recoverablePublishedFile) {
                     if (type == TYPE_MOVE && source.exists()) {
                         if (source.length() != expectedSize || source.lastModified() / 1000L != expectedMtimeSeconds) {
                             throw IllegalStateException("Source changed since the operation was planned; source retained during recovery")
