@@ -127,6 +127,17 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
                     persistState()
                     log("PLAN", "Reserved destination ${plan.getString("destination")} · size=$expectedSize · mtime(s)=$expectedMtimeSeconds")
                 }
+                if (!plan.optBoolean("sourcePresent", true) && source.isFile && source.canRead()) {
+                    plan.put("destination", uniqueDestination(destinationDirectory, source.name).absolutePath)
+                    plan.put("size", source.length())
+                    plan.put("mtimeSeconds", source.lastModified() / 1000L)
+                    plan.put("sourcePresent", true)
+                    plan.put("started", false)
+                    plan.put("phase", "planned")
+                    plans.put(sourcePath, plan)
+                    persistState()
+                    log("RECOVERY", "Source reappeared after an earlier unavailable attempt; its metadata and destination plan were refreshed")
+                }
                 val destination = File(plan.getString("destination"))
                 val expectedSize = plan.optLong("size", -1L)
                 val expectedMtimeSeconds = plan.optLong("mtimeSeconds", -1L)
