@@ -144,7 +144,7 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
                 val recoverablePublishedFile = plan.optString("phase") == "published" ||
                     (plan.optBoolean("started", false) && destination.exists()) ||
                     (type == TYPE_MOVE && !source.exists())
-                if (plan.optBoolean("started", false) && destination.exists() &&
+                if (plan.optBoolean("started", false) && plan.optBoolean("sourcePresent", true) && destination.exists() &&
                     verifyDestination(destination, destination.name, expectedSize, expectedMtimeSeconds) &&
                     recoverablePublishedFile) {
                     if (type == TYPE_MOVE && source.exists()) {
