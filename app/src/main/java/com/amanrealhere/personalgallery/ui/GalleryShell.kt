@@ -161,7 +161,7 @@ fun GalleryShell(viewModel: GalleryViewModel) {
     var operationLogText by remember { mutableStateOf("") }
     val operationDialogScrollState = rememberScrollState()
     var operationLaunchError by remember { mutableStateOf<String?>(null) }
-    var pendingToastOperationIds by remember { mutableStateOf(setOf<String>())
+    var pendingToastOperationIds by remember { mutableStateOf(setOf<String>()) }
     LaunchedEffect(viewModel) {
         launch { viewModel.fileOperationStartedIds.collect { pendingToastOperationIds = pendingToastOperationIds + it } }
         launch { viewModel.fileOperationMessages.collect { operationLaunchError = it; Toast.makeText(context, "Could not queue operation", Toast.LENGTH_SHORT).show() } }
@@ -186,6 +186,7 @@ fun GalleryShell(viewModel: GalleryViewModel) {
         }
     }
     LaunchedEffect(latestFileOperationId) {
+        advancedLogVisible = false
         if (latestFileOperationId != null) operationDialogVisible = true
     }
     LaunchedEffect(displayedFileOperation?.id, displayedFileOperation?.progress, displayedFileOperation?.outputData, latestFileOperationId, advancedLogVisible) {
