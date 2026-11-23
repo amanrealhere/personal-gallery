@@ -28,15 +28,10 @@ class MediaGridPagingAdapter(
     private var selectionMode = selectedPaths.isNotEmpty()
 
     fun updateSelection(paths: Set<String>, onToggle: (String) -> Unit) {
-        val previousMode = selectionMode
         val changedPaths = (selectedPaths - paths) + (paths - selectedPaths)
         selectedPaths = paths
         selectionMode = paths.isNotEmpty()
         onToggleSelection = onToggle
-        if (previousMode != selectionMode) {
-            notifyDataSetChanged()
-            return
-        }
         if (changedPaths.isEmpty()) return
         snapshot().items.forEachIndexed { index, item ->
             if (item.sourcePath in changedPaths) notifyItemChanged(index)
@@ -48,9 +43,13 @@ class MediaGridPagingAdapter(
 
     override fun onBindViewHolder(holder: MediaViewHolder, position: Int) {
         val media = getItem(position)
-        if (media != null) holder.bind(media, media.sourcePath in selectedPaths, selectionMode, onToggleSelection) else holder.clear()
+        if (media != null) {
+            holder.bind(media, media.sourcePath in selectedPaths, { selectionMode }) { path ->
+                selectionMode = true
+                onToggleSelection?.invoke(path)
+            }
+        } else holder.clear()
     }
-
     override fun onViewRecycled(holder: MediaViewHolder) {
         holder.clear()
         super.onViewRecycled(holder)
@@ -62,8 +61,8 @@ class MediaGridPagingAdapter(
     }
 
     class MediaViewHolder(private val cell: MediaGridItemView) : RecyclerView.ViewHolder(cell) {
-        fun bind(media: MediaItemEntity, selected: Boolean, selectionMode: Boolean, onToggle: ((String) -> Unit)?) =
-            cell.bind(media, selected, selectionMode, onToggle)
+        fun bind(media: MediaItemEntity, selected: Boolean, selectionModeProvider: () -> Boolean, onToggle: ((String) -> Unit)?) =
+            cell.bind(media, selected, selectionModeProvider, onToggle)
         fun clear() = cell.clear()
     }
 
@@ -116,10 +115,11 @@ class MediaGridItemView(context: android.content.Context) : FrameLayout(context)
             background = GradientDrawable().apply {
                 shape = GradientDrawable.OVAL
                 setColor(0xFFB8D8FF.toInt())
+                setStroke(dp(1), 0xFF90CAF9.toInt())
             }
         }
-        addView(checkBadge, LayoutParams(dp(28), dp(28), android.view.Gravity.TOP or android.view.Gravity.END).apply {
-            setMargins(dp(8), dp(8), dp(8), dp(8))
+        addView(checkBadge, LayoutParams(dp(30), dp(30), android.view.Gravity.TOP or android.view.Gravity.END).apply {
+            setMargins(dp(10), dp(10), dp(10), dp(10))
         })
 
         filename.apply {
@@ -140,6 +140,24 @@ class MediaGridItemView(context: android.content.Context) : FrameLayout(context)
         )
     }
 
+    private fun toggleSelectionImmediately() {
+        applySelectionAppearance(!locallySelected)
+        boundPath?.let { toggleSelectionCallback?.invoke(it) }
+    }
+
+    private fun applySelectionAppearance(selected: Boolean) {
+        locallySelected = selected
+        selectedScrim.visibility = if (selected) View.VISIBLE else View.GONE
+        checkBadge.visibility = if (selected) View.VISIBLE else View.GONE
+        checkBadge.text = if (selected) "✓" else ""
+        isSelected = selected
+        background = GradientDrawable().apply {
+            cornerRadius = dp(12).toFloat()
+            setColor(0xFF202020.toInt())
+            setStroke(dp(if (selected) 2 else 1), if (selected) 0xFF90CAF9.toInt() else 0xFF353535.toInt())
+        }
+    }
+
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
@@ -148,23 +166,25 @@ class MediaGridItemView(context: android.content.Context) : FrameLayout(context)
         setMeasuredDimension(width, width)
     }
 
-    fun bind(media: MediaItemEntity, selected: Boolean, selectionMode: Boolean, onToggleSelection: ((String) -> Unit)?) {
+    private var locallySelected = false
+    private var selectionModeProvider: () -> Boolean = { false }
+    private var toggleSelectionCallback: ((String) -> Unit)? = null
+    private var boundPath: String? = null
+
+    fun bind(media: MediaItemEntity, selected: Boolean, selectionModeProvider: () -> Boolean, onToggleSelection: ((String) -> Unit)?) {
         filename.text = media.displayName
-        selectedScrim.visibility = if (selected) View.VISIBLE else View.GONE
-        checkBadge.visibility = if (selected) View.VISIBLE else View.GONE
-        checkBadge.text = if (selected) "✓" else ""
-        background = GradientDrawable().apply {
-            cornerRadius = dp(12).toFloat()
-            setColor(0xFF202020.toInt())
-            setStroke(dp(if (selected) 2 else 1), if (selected) 0xFF90CAF9.toInt() else 0xFF353535.toInt())
-        }
+        contentDescription = media.displayName
+        boundPath = media.sourcePath
+        this.selectionModeProvider = selectionModeProvider
+        toggleSelectionCallback = onToggleSelection
+        applySelectionAppearance(selected)
         isClickable = true
         isLongClickable = true
         setOnClickListener {
-            if (selectionMode) onToggleSelection?.invoke(media.sourcePath)
+            if (selectionModeProvider()) toggleSelectionImmediately()
         }
         setOnLongClickListener {
-            onToggleSelection?.invoke(media.sourcePath)
+            toggleSelectionImmediately()
             true
         }
         val cacheKey = "${media.sourceCanonicalPath}|${media.fileSizeBytes}|" +
@@ -189,8 +209,9 @@ class MediaGridItemView(context: android.content.Context) : FrameLayout(context)
         Glide.with(thumbnail).clear(thumbnail)
         thumbnail.setImageDrawable(null)
         filename.text = ""
-        selectedScrim.visibility = View.GONE
-        checkBadge.visibility = View.GONE
+        boundPath = null
+        toggleSelectionCallback = null
+        applySelectionAppearance(false)
         setOnClickListener(null)
         setOnLongClickListener(null)
         currentRequestKey = null
