@@ -79,7 +79,8 @@ fun GalleryShell(viewModel: GalleryViewModel) {
     val activeFileOperation = fileOperationWorkInfos.firstOrNull { it.state == WorkInfo.State.RUNNING }
     val displayedFileOperation = activeFileOperation
         ?: latestFileOperationId?.let { id -> fileOperationWorkInfos.firstOrNull { it.id.toString() == id } }
-    val fileOperationProcessed = displayedFileOperation?.progress?.getInt(MediaFileOperationWorker.KEY_PROCESSED, 0) ?: 0
+    val fileOperationProcessed = displayedFileOperation?.progress?.getInt(MediaFileOperationWorker.KEY_PROCESSED, 0)
+        ?: displayedFileOperation?.outputData?.getInt(MediaFileOperationWorker.KEY_PROCESSED, 0) ?: 0
     val fileOperationTotal = displayedFileOperation?.progress?.getInt(MediaFileOperationWorker.KEY_TOTAL, 0)
         ?: displayedFileOperation?.outputData?.getInt(MediaFileOperationWorker.KEY_TOTAL, 0) ?: 0
     val fileOperationSucceeded = displayedFileOperation?.progress?.getInt(MediaFileOperationWorker.KEY_SUCCEEDED, 0)
@@ -289,10 +290,14 @@ fun GalleryShell(viewModel: GalleryViewModel) {
                         title = { Text(if (displayedFileOperation.state.isFinished) "File operation finished" else "File operation") },
                         text = {
                             Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
+                                val queuedOperations = fileOperationWorkInfos.count {
+                                    it.state == WorkInfo.State.ENQUEUED || it.state == WorkInfo.State.BLOCKED
+                                }
                                 Text(
                                     "${displayedFileOperation.state.name} · $fileOperationProcessed / $fileOperationTotal · $fileOperationSucceeded succeeded · $fileOperationFailed failed",
                                     style = MaterialTheme.typography.bodyMedium
                                 )
+                                if (queuedOperations > 0) Text("$queuedOperations operation(s) queued", style = MaterialTheme.typography.bodySmall)
                                 if (fileOperationTotal > 0) {
                                     LinearProgressIndicator(
                                         progress = { (fileOperationProcessed.toFloat() / fileOperationTotal).coerceIn(0f, 1f) },
