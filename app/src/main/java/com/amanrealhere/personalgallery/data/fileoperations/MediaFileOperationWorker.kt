@@ -141,6 +141,7 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
                 // it could persist its completion record. The destination was
                 // planned and persisted before the file operation began.
                 val recoverablePublishedFile = plan.optString("phase") == "published" ||
+                    (plan.optBoolean("started", false) && destination.exists()) ||
                     (type == TYPE_MOVE && !source.exists())
                 if (plan.optBoolean("started", false) && destination.exists() &&
                     verifyDestination(destination, destination.name, expectedSize, expectedMtimeSeconds) &&
