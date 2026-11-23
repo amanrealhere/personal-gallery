@@ -4,6 +4,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
 import android.os.Build
+import android.os.Environment
 import androidx.core.app.NotificationCompat
 import androidx.work.CoroutineWorker
 import androidx.work.ForegroundInfo
@@ -255,7 +256,7 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
         } catch (e: AtomicMoveNotSupportedException) {
             log("FALLBACK", "Atomic rename unsupported; using copy-and-delete: ${e.message}")
         } catch (e: FileSystemException) {
-            if (!isCrossDeviceOrAtomicUnsupported(e)) throw e
+            if (!isCrossDeviceOrAtomicUnsupported(e) && !differentStorageVolumes(source, destinationDirectory)) throw e
             log("FALLBACK", "Atomic rename unavailable for these filesystems; using copy-and-delete: ${e.message}")
         }
 
@@ -308,7 +309,32 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
 
     private fun isCrossDeviceOrAtomicUnsupported(e: FileSystemException): Boolean {
         val reason = (e.reason ?: e.message ?: "").lowercase()
-        return listOf("cross-device", "cross device", "exdev", "not same device", "atomic move not supported", "operation not supported").any { it in reason }
+        return listOf(
+            "cross-device", "cross device", "exdev", "not same device",
+            "invalid cross-device link", "atomic move not supported", "operation not supported"
+        ).any { it in reason }
+    }
+
+    /**
+     * Android's Files.getFileStore() is restricted and cannot be used as a
+     * reliable volume test. Infer common shared-storage volume roots only after
+         * ATOMIC_MOVE itself has failed; this is used solely to decide whether
+         copy-and-delete is an appropriate fallback.
+     */
+    private fun differentStorageVolumes(source: File, destination: File): Boolean {
+        fun volumeRoot(file: File): String? {
+            val path = runCatching { file.canonicalPath }.getOrNull() ?: return null
+            val primary = runCatching { Environment.getExternalStorageDirectory().canonicalPath }.getOrNull()
+            if (primary != null && (path == primary || path.startsWith(primary.trimEnd('/') + "/"))) return primary
+            if (path.startsWith("/storage/")) {
+                val volume = path.removePrefix("/storage/").substringBefore('/')
+                if (volume.isNotBlank() && volume != "self") return "/storage/$volume"
+            }
+            return null
+        }
+        val sourceRoot = volumeRoot(source)
+        val destinationRoot = volumeRoot(destination)
+        return sourceRoot != null && destinationRoot != null && sourceRoot != destinationRoot
     }
 
     private fun publishProgress(processed: Int, total: Int, succeeded: Int, failed: Int, current: String, status: String) {
