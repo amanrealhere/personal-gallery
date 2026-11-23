@@ -46,6 +46,7 @@ import com.amanrealhere.personalgallery.ui.screens.addalbum.AddAlbumScreen
 import com.amanrealhere.personalgallery.ui.screens.album.AlbumContentsScreen
 import com.amanrealhere.personalgallery.ui.screens.home.HomeScreen
 import java.io.File
+import org.json.JSONObject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -100,6 +101,22 @@ fun GalleryShell(viewModel: GalleryViewModel) {
     var operationLogText by remember { mutableStateOf("Loading operation log…") }
     val operationLogScrollState = rememberScrollState()
     var operationLaunchError by remember { mutableStateOf<String?>(null) }
+    var queuedOperationDetails by remember { mutableStateOf<List<String>>(emptyList()) }
+    LaunchedEffect(fileOperationWorkInfos) {
+        val queued = fileOperationWorkInfos.filter {
+            it.state == WorkInfo.State.ENQUEUED || it.state == WorkInfo.State.BLOCKED
+        }
+        queuedOperationDetails = withContext(Dispatchers.IO) {
+            queued.map { work ->
+                val requestFile = File(context.filesDir, "media-operation-" + work.id + ".json")
+                val request = runCatching { JSONObject(requestFile.readText()) }.getOrNull()
+                val type = request?.optString("type")?.takeIf { it.isNotBlank() } ?: "File operation"
+                val count = request?.optJSONArray("sources")?.length() ?: 0
+                val destination = request?.optString("destination")?.takeIf { it.isNotBlank() } ?: "Destination unavailable"
+                type + " · " + count + " file(s) → " + destination + " · " + work.state.name
+            }
+        }
+    }
     LaunchedEffect(viewModel) {
         viewModel.fileOperationMessages.collect { operationLaunchError = it }
     }
@@ -321,7 +338,18 @@ fun GalleryShell(viewModel: GalleryViewModel) {
                                     "${displayedFileOperation.state.name} · $fileOperationProcessed / $fileOperationTotal · $fileOperationSucceeded succeeded · $fileOperationFailed failed",
                                     style = MaterialTheme.typography.bodyMedium
                                 )
-                                if (queuedOperations > 0) Text("$queuedOperations operation(s) queued", style = MaterialTheme.typography.bodySmall)
+                                if (queuedOperationDetails.isNotEmpty()) {
+                                    Text("Queued operations", style = MaterialTheme.typography.titleSmall)
+                                    queuedOperationDetails.forEach { detail ->
+                                        Text(
+                                            detail,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            maxLines = 3
+                                        )
+                                    }
+                                } else if (queuedOperations > 0) {
+                                    Text("$queuedOperations operation(s) queued", style = MaterialTheme.typography.bodySmall)
+                                }
                                 if (fileOperationTotal > 0) {
                                     LinearProgressIndicator(
                                         progress = { (fileOperationProcessed.toFloat() / fileOperationTotal).coerceIn(0f, 1f) },
