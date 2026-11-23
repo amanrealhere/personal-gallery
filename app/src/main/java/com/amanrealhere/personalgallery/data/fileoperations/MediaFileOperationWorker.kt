@@ -212,9 +212,11 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
             }
             val affectedAlbums = (sourceAlbums + listOfNotNull(destinationAlbum)).distinctBy { it.id }
             log("RECONCILE", "Refreshing index and thumbnail work for ${affectedAlbums.size} affected album(s)")
+            publishProgress(processed, total, succeeded, failed, "Album index", "Refreshing affected album indexes and thumbnails")
             for (album in affectedAlbums) {
                 try {
                     log("RECONCILE", "Album refresh started: ${album.name}")
+                    publishProgress(processed, total, succeeded, failed, album.name, "Refreshing album index and thumbnails")
                     MediaIndexRepository(app.database.mediaItemDao()).reconcileAlbum(album.id, File(album.canonicalPath))
                     ThumbnailWorkScheduler.enqueueAlbum(applicationContext, album.id, force = false)
                     log("RECONCILE", "Album refresh and thumbnail scheduling succeeded: ${album.name}")
