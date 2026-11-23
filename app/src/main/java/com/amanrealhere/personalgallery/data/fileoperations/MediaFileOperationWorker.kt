@@ -52,6 +52,7 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
     private var operationState = JSONObject()
     private var plans = JSONObject()
     private var completed = JSONObject()
+    private var operationStartedAtMillis: Long = 0L
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         val operationId = inputData.getString(KEY_OPERATION_ID) ?: return@withContext Result.failure()
@@ -737,6 +738,8 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
         const val TYPE_COPY = "COPY"
         const val TYPE_MOVE = "MOVE"
         const val TAG = "personal-gallery-file-operation"
+        const val TAG_COPY = "personal-gallery-file-operation-copy"
+        const val TAG_MOVE = "personal-gallery-file-operation-move"
         private const val CHANNEL_ID = "personal-gallery-file-operations"
 
         fun areNotificationsEnabled(context: Context): Boolean {
