@@ -17,6 +17,8 @@ import androidx.work.workDataOf
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -183,7 +185,7 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
                 val result = if (type == TYPE_MOVE) {
                     moveOne(source, destinationDirectory, plan.getString("destination"), expectedSize, expectedMtimeSeconds, sourcePath, plan, index, total, succeeded, failed)
                 } else {
-                    copyOne(source, destinationDirectory, plan.getString("destination"), expectedSize, expectedMtimeSeconds, sourcePath, plan)
+                    copyOne(source, destinationDirectory, plan.getString("destination"), expectedSize, expectedMtimeSeconds, sourcePath, plan, processed, total, succeeded, failed)
                 }
                 if (result) {
                     val finalDestination = File(plan.getString("destination"))
@@ -266,14 +268,18 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
         ))
     }
 
-    private fun copyOne(
+    private suspend fun copyOne(
         source: File,
         destinationDirectory: File,
         destinationPath: String,
         expectedSize: Long,
         expectedMtimeSeconds: Long,
         sourcePath: String,
-        plan: JSONObject
+        plan: JSONObject,
+        processed: Int,
+        total: Int,
+        succeeded: Int,
+        failed: Int
     ): File {
         if (!source.isFile || !source.canRead()) throw IllegalStateException("Source is unavailable")
         val destination = File(destinationPath)
@@ -313,7 +319,7 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
         }
     }
 
-    private fun moveOne(
+    private suspend fun moveOne(
         source: File,
         destinationDirectory: File,
         destinationPath: String,
@@ -358,7 +364,7 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
 
         publishProgress(processed, total, succeeded, failed, source.name, "Copying before deleting source")
         setForeground(createForegroundInfo(TYPE_MOVE, processed, total, "Fallback copy · ${source.name}"))
-        val copied = copyOne(source, destinationDirectory, destinationPath, expectedSize, expectedMtimeSeconds, sourcePath, plan)
+        val copied = copyOne(source, destinationDirectory, destinationPath, expectedSize, expectedMtimeSeconds, sourcePath, plan, processed, total, succeeded, failed)
         if (!verifyDestination(copied, expectedDestinationName, expectedSize, expectedMtimeSeconds)) {
             throw IllegalStateException("Destination verification failed; original retained")
         }
