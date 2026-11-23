@@ -351,19 +351,26 @@ fun GalleryShell(viewModel: GalleryViewModel) {
                     )
                 }
 
-                if (displayedFileOperation != null && operationDialogVisible) {
+                if (latestFileOperationId != null && operationDialogVisible) {
                     AlertDialog(
                         onDismissRequest = {},
-                        title = { Text(if (displayedFileOperation.state.isFinished) "File operation finished" else "File operation") },
+                        title = { Text(if (displayedFileOperation?.state?.isFinished == true) "File operation finished" else "File operation") },
                         text = {
                             Column(Modifier.fillMaxWidth().verticalScroll(operationLogScrollState)) {
                                 val queuedOperations = fileOperationWorkInfos.count {
                                     it.state == WorkInfo.State.ENQUEUED || it.state == WorkInfo.State.BLOCKED
                                 }
-                                Text(
-                                    "${displayedFileOperation.state.name} · $fileOperationProcessed / $fileOperationTotal · $fileOperationSucceeded succeeded · $fileOperationFailed failed",
-                                    style = MaterialTheme.typography.bodyMedium
-                                )
+                                if (displayedFileOperation != null) {
+                                    Text(
+                                        "${displayedFileOperation.state.name} · $fileOperationProcessed / $fileOperationTotal · $fileOperationSucceeded succeeded · $fileOperationFailed failed",
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
+                                } else {
+                                    Text(
+                                        "Saved operation result · $fileOperationProcessed / $fileOperationTotal · $fileOperationSucceeded succeeded · $fileOperationFailed failed",
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
+                                }
                                 if (queuedOperationDetails.isNotEmpty()) {
                                     Text("Queued operations", style = MaterialTheme.typography.titleSmall)
                                     queuedOperationDetails.forEach { detail ->
