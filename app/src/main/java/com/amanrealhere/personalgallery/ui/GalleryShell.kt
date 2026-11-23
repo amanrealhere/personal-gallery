@@ -171,7 +171,7 @@ fun GalleryShell(viewModel: GalleryViewModel) {
         if (completedToasts.isNotEmpty()) {
             completedToasts.forEach { work ->
                 val type = work.outputData.getString(MediaFileOperationWorker.KEY_TYPE)
-                    ?: work.inputData.getString(MediaFileOperationWorker.KEY_TYPE)
+                    ?: if (MediaFileOperationWorker.TAG_MOVE in work.tags) MediaFileOperationWorker.TYPE_MOVE else MediaFileOperationWorker.TYPE_COPY
                 val action = if (type == MediaFileOperationWorker.TYPE_MOVE) "Move" else "Copy"
                 val failedCount = work.outputData.getInt(MediaFileOperationWorker.KEY_FAILED, 0)
                 val summary = work.outputData.getString(MediaFileOperationWorker.KEY_SUMMARY).orEmpty()
@@ -399,8 +399,8 @@ fun GalleryShell(viewModel: GalleryViewModel) {
                     val operationFinished = workState?.isFinished == true || savedOperationResult.optString("status") == "COMPLETED"
                     val operationRunning = workState == WorkInfo.State.RUNNING
                     val operationType = displayedFileOperation?.outputData?.getString(MediaFileOperationWorker.KEY_TYPE)
-                        ?: displayedFileOperation?.inputData?.getString(MediaFileOperationWorker.KEY_TYPE)
-                        ?: savedOperationResult.optString("type", "COPY")
+                        ?: if (displayedFileOperation?.tags?.contains(MediaFileOperationWorker.TAG_MOVE) == true) MediaFileOperationWorker.TYPE_MOVE
+                        else savedOperationResult.optString("type", MediaFileOperationWorker.TYPE_COPY)
                     val operationName = if (operationType == MediaFileOperationWorker.TYPE_MOVE) "Move" else "Copy"
                     val savedSummary = displayedFileOperation?.outputData?.getString(MediaFileOperationWorker.KEY_SUMMARY)
                         ?: savedOperationResult.optString("summary")
