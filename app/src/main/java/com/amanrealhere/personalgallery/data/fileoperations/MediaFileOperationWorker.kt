@@ -80,7 +80,6 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
         var processed = 0
         var succeeded = 0
         var failed = 0
-        val briefErrors = mutableListOf<String>()
         log("START", "$type · $total files · Destination: ${destinationDirectory.absolutePath}")
         cleanupAbandonedTemporaryFiles(destinationDirectory)
         setForeground(createForegroundInfo(type, 0, total, "Preparing · $total files"))
@@ -172,7 +171,6 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
             } catch (exception: Exception) {
                 failed++
                 val detail = "${source.name}: ${exception.message ?: exception.javaClass.simpleName}"
-                briefErrors += detail
                 log("FAIL", detail)
             }
             processed++
@@ -217,6 +215,10 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
         val reconciliationSuffix = if (reconciliationFailures == 0) "" else " · $reconciliationFailures album refresh failure(s)"
         val summary = "$succeeded succeeded, $failed failed, $processed of $total processed$reconciliationSuffix"
         log("SUMMARY", summary)
+        if (reconciliationFailures > 0 && runAttemptCount < 2) {
+            log("RETRY", "Retrying durable album reconciliation (attempt ${runAttemptCount + 1})")
+            return@withContext Result.retry()
+        }
         requestFile.delete()
         postCompletionNotification(type, summary)
         // WorkManager Data remains bounded. Full details are retained in the
@@ -256,10 +258,15 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
                 throw IllegalStateException("Temporary file verification failed (size or mtime-to-seconds)")
             }
             log("VERIFY", "Temporary mtime verified to seconds: ${temporary.lastModified()/1000L}")
-            Files.move(temporary.toPath(), destination.toPath())
-            if (!verifyDestination(destination, destination.name, expectedSize, expectedMtimeSeconds) ||
-                destination.name != File(destinationPath).name
-            ) {
+            val expectedDestinationName = File(destinationPath).name
+            try {
+                Files.move(temporary.toPath(), destination.toPath(), StandardCopyOption.ATOMIC_MOVE)
+                log("PUBLISH", "Temporary file published atomically")
+            } catch (_: AtomicMoveNotSupportedException) {
+                Files.move(temporary.toPath(), destination.toPath())
+                log("PUBLISH", "Atomic publication unsupported; used filesystem move")
+            }
+            if (!verifyDestination(destination, expectedDestinationName, expectedSize, expectedMtimeSeconds)) {
                 throw IllegalStateException("Published destination verification failed")
             }
             log("VERIFY", "Published destination verified: name=${destination.name}; size=${destination.length()}; mtime(s)= ${destination.lastModified()/1000L}")
