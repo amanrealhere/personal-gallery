@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Box
 import androidx.compose.ui.Alignment
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Spacer
@@ -149,7 +148,6 @@ fun GalleryShell(viewModel: GalleryViewModel) {
         ?: displayedFileOperation?.outputData?.getInt(MediaFileOperationWorker.KEY_PROGRESS_UNITS, fileOperationProcessed * 1000)
         ?: savedOperationResult.optInt(MediaFileOperationWorker.KEY_PROGRESS_UNITS, fileOperationProcessed * 1000)
     val operationStartedAtMillis = savedOperationState.optLong("startedAtMillis", 0L)
-    val operationDurationMs = savedOperationResult.optLong("durationMs", -1L)
     val operationDurationMs = savedOperationResult.optLong("durationMs", -1L)
     val fileOperationStatus = if (displayedFileOperation?.state?.isFinished == true) {
         displayedFileOperation.outputData.getString(MediaFileOperationWorker.KEY_SUMMARY)
