@@ -98,7 +98,10 @@ class MediaIndexRepository(private val mediaItemDao: MediaItemDao) {
                                     for (entry in entries) {
                                         currentCoroutineContext().ensureActive()
                                         val child = entry.toFile()
-                                        if (child.name == ".personal-gallery" || child.name == ".thumbnails") continue
+                                        if (child.name == ".personal-gallery") {
+                                            val childCanonicalPath = runCatching { child.canonicalPath }.getOrNull()
+                                            if (childCanonicalPath == appStorageRoot.path) continue
+                                        }
 
                                         // Directories must be discovered regardless of name;
                                         // supported image candidates receive full metadata reads.
