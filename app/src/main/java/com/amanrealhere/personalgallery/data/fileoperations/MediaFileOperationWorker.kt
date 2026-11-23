@@ -109,11 +109,12 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
         ))
     }
 
-    private fun copyOne(source: File, destinationDirectory: File): File {
+    private fun copyOne(source: File, destinationDirectory: File, plannedDestination: File? = null): File {
         if (!source.isFile || !source.canRead()) throw IllegalStateException("Source is unavailable")
         val originalSize = source.length()
         val originalModifiedSeconds = source.lastModified() / 1000L
-        val destination = uniqueDestination(destinationDirectory, source.name)
+        val destination = plannedDestination ?: uniqueDestination(destinationDirectory, source.name)
+        val expectedDestinationName = destination.name
         val temporary = File(destinationDirectory, ".personal-gallery-$currentOperationId-${UUID.randomUUID()}.tmp")
         log("COPY", "Copying to temporary file: ${temporary.name}; expected size=$originalSize; mtime(s)=$originalModifiedSeconds")
         try {
@@ -135,7 +136,6 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
             }
             log("VERIFY", "Temporary mtime verified to seconds: ${temporary.lastModified()/1000L}")
             Files.move(temporary.toPath(), destination.toPath())
-            val expectedDestinationName = destination.name
             if (expectedDestinationName != source.name) {
                 log("VERIFY", "Collision suffix accepted: $expectedDestinationName")
             }
@@ -162,10 +162,11 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
             return false
         }
         val destination = uniqueDestination(destinationDirectory, source.name)
-        log("MOVE", "Attempting atomic rename: ${source.name} → ${destination.name}")
+        val expectedDestinationName = destination.name
+        log("MOVE", "Attempting atomic rename: ${source.name} → ${expectedDestinationName}")
         try {
             Files.move(source.toPath(), destination.toPath(), StandardCopyOption.ATOMIC_MOVE)
-            val valid = destination.isFile && destination.name == destination.name &&
+            val valid = destination.isFile && destination.name == expectedDestinationName &&
                 destination.length() == originalSize &&
                 destination.lastModified() / 1000L == originalModifiedSeconds && !source.exists()
             log("VERIFY", "Atomic rename checks: name=${destination.name}; size=${destination.length() == originalSize}; mtime-seconds=${destination.lastModified()/1000L == originalModifiedSeconds}; source-absent=${!source.exists()}")
@@ -185,8 +186,8 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
 
         publishProgress(processed, total, succeeded, failed, source.name, "Copying before deleting source")
         setForeground(createForegroundInfo(TYPE_MOVE, processed, total, "Fallback copy · ${source.name}"))
-        val copied = copyOne(source, destinationDirectory)
-        val copiedValid = copied.name == destination.name && copied.length() == originalSize &&
+        val copied = copyOne(source, destinationDirectory, destination)
+        val copiedValid = copied.name == expectedDestinationName && copied.length() == originalSize &&
             copied.lastModified() / 1000L == originalModifiedSeconds
         log("VERIFY", "Fallback destination checks: name=${copied.name == destination.name}; size=${copied.length() == originalSize}; mtime-seconds=${copied.lastModified()/1000L == originalModifiedSeconds}")
         if (!copiedValid) throw IllegalStateException("Destination verification failed; original retained")
