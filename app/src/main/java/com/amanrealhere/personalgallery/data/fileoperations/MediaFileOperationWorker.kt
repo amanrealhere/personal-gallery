@@ -185,6 +185,11 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
             publishProgress(processed, total, succeeded, failed, source.name, "$action processed")
         }
 
+        if (processed < total) {
+            log("INTERRUPTED", "Only $processed of $total files processed; retrying with persisted state")
+            return@withContext Result.retry()
+        }
+
         var reconciliationFailures = 0
         val sourcePathList = (0 until sourcePaths.length()).map { sourcePaths.optString(it) }
         try {
