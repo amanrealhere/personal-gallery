@@ -46,11 +46,25 @@ import com.amanrealhere.personalgallery.ui.screens.addalbum.AddAlbumScreen
 import com.amanrealhere.personalgallery.ui.screens.album.AlbumContentsScreen
 import com.amanrealhere.personalgallery.ui.screens.home.HomeScreen
 import java.io.File
+import java.io.RandomAccessFile
 import org.json.JSONObject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 private enum class GalleryDestination { Albums, AddAlbum }
+
+private fun readOperationLogTail(file: File, maxBytes: Int): String =
+    RandomAccessFile(file, "r").use { reader ->
+        val length = reader.length()
+        val start = (length - maxBytes.toLong()).coerceAtLeast(0L)
+        reader.seek(start)
+        if (start > 0L) reader.readLine()
+        val remaining = (length - reader.filePointer).coerceAtLeast(0L).toInt()
+        val bytes = ByteArray(remaining)
+        reader.readFully(bytes)
+        val tail = String(bytes, Charsets.UTF_8)
+        if (start > 0L) "[Recent log excerpt]\n\n" + tail else tail
+    }
 
 @Composable
 fun GalleryShell(viewModel: GalleryViewModel) {
@@ -130,7 +144,9 @@ fun GalleryShell(viewModel: GalleryViewModel) {
         val work = displayedFileOperation
         operationLogText = if (work == null) "" else withContext(Dispatchers.IO) {
             val logFile = File(context.filesDir, "media-operation-${work.id}.log")
-            if (logFile.isFile) runCatching { logFile.readText() }.getOrElse { "Unable to read detailed log: ${it.message}" }
+            if (logFile.isFile) runCatching {
+                if (work.state.isFinished) logFile.readText() else readOperationLogTail(logFile, 64 * 1024)
+            }.getOrElse { "Unable to read detailed log: ${it.message}" }
             else "Operation log has not been created yet."
         }
     }
