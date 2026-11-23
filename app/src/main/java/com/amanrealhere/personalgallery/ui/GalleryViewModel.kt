@@ -76,15 +76,6 @@ class GalleryViewModel(
                 }
                 _latestFileOperationId.value = operationId
                 operationPreferences.edit().putString("latest_operation_id", operationId).apply()
-                val workManager = WorkManager.getInstance(getApplication<Application>())
-                val finishedWork = workManager.getWorkInfosByTagFlow(MediaFileOperationWorker.TAG)
-                    .first { infos -> infos.any { it.id.toString() == operationId && it.state.isFinished } }
-                    .first { it.id.toString() == operationId }
-
-                // Worker output and its durable operation log are consumed by the
-                // persistent dialog. This coroutine only waits for completion so
-                // the UI state remains anchored to this operation ID.
-                finishedWork.outputData
             } catch (exception: CancellationException) {
                 throw exception
             } catch (exception: Exception) {
