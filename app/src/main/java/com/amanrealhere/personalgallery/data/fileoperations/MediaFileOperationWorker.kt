@@ -5,6 +5,10 @@ import android.app.NotificationManager
 import android.content.Context
 import android.os.Build
 import android.os.Environment
+import com.amanrealhere.personalgallery.PersonalGalleryApplication
+import com.amanrealhere.personalgallery.data.repository.MediaIndexRepository
+import com.amanrealhere.personalgallery.data.thumbnail.ThumbnailWorkScheduler
+import kotlinx.coroutines.flow.first
 import androidx.core.app.NotificationCompat
 import androidx.work.CoroutineWorker
 import androidx.work.ForegroundInfo
@@ -175,7 +179,43 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
             publishProgress(processed, total, succeeded, failed, source.name, "$action processed")
         }
 
-        val summary = "$succeeded succeeded, $failed failed, $processed of $total processed"
+        var reconciliationFailures = 0
+        val sourcePathList = (0 until sourcePaths.length()).map { sourcePaths.optString(it) }
+        try {
+            val app = applicationContext as PersonalGalleryApplication
+            val registeredAlbums = app.database.albumDao().observeAll().first()
+            val sourceAlbums = registeredAlbums.filter { album ->
+                sourcePathList.any { path ->
+                    path.startsWith(album.canonicalPath.trimEnd(File.separatorChar) + File.separator)
+                }
+            }
+            val destinationAlbum = registeredAlbums.firstOrNull {
+                runCatching { File(it.canonicalPath).canonicalPath == destinationDirectory.canonicalPath }.getOrDefault(false)
+            }
+            val affectedAlbums = (sourceAlbums + listOfNotNull(destinationAlbum)).distinctBy { it.id }
+            log("RECONCILE", "Refreshing index and thumbnail work for ${affectedAlbums.size} affected album(s)")
+            for (album in affectedAlbums) {
+                try {
+                    log("RECONCILE", "Album refresh started: ${album.name}")
+                    MediaIndexRepository(app.database.mediaItemDao()).reconcileAlbum(album.id, File(album.canonicalPath))
+                    ThumbnailWorkScheduler.enqueueAlbum(applicationContext, album.id, force = false)
+                    log("RECONCILE", "Album refresh and thumbnail scheduling succeeded: ${album.name}")
+                } catch (exception: CancellationException) {
+                    throw exception
+                } catch (exception: Exception) {
+                    reconciliationFailures++
+                    log("RECONCILE_FAIL", "${album.name}: ${exception.message ?: "refresh failed"}")
+                }
+            }
+        } catch (exception: CancellationException) {
+            throw exception
+        } catch (exception: Exception) {
+            reconciliationFailures++
+            log("RECONCILE_FAIL", "Could not discover affected albums: ${exception.message ?: "refresh failed"}")
+        }
+
+        val reconciliationSuffix = if (reconciliationFailures == 0) "" else " · $reconciliationFailures album refresh failure(s)"
+        val summary = "$succeeded succeeded, $failed failed, $processed of $total processed$reconciliationSuffix"
         log("SUMMARY", summary)
         requestFile.delete()
         postCompletionNotification(type, summary)
