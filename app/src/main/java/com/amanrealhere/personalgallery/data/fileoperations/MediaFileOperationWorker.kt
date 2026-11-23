@@ -406,8 +406,8 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
     /**
      * Android's Files.getFileStore() is restricted and cannot be used as a
      * reliable volume test. Infer common shared-storage volume roots only after
-         * ATOMIC_MOVE itself has failed; this is used solely to decide whether
-         copy-and-delete is an appropriate fallback.
+     * ATOMIC_MOVE itself has failed; this is used solely to decide whether
+     * copy-and-delete is an appropriate fallback.
      */
     private fun differentStorageVolumes(source: File, destination: File): Boolean {
         fun volumeRoot(file: File): String? {
@@ -531,7 +531,6 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
         const val KEY_FAILED = "failed"
         const val KEY_CURRENT = "current"
         const val KEY_SUMMARY = "summary"
-        const val KEY_ERRORS = "errors"
         const val KEY_ERROR = "error"
         const val KEY_STATUS = "status"
         const val KEY_LOG_PATH = "log_path"
