@@ -408,7 +408,7 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
             .setOnlyAlertOnce(true)
             .setAutoCancel(false)
             .build()
-        return ForegroundInfo(NOTIFICATION_ID, notification,
+        return ForegroundInfo(operationNotificationId(), notification,
             android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
     }
 
@@ -423,7 +423,12 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
             .setAutoCancel(false)
             .setOngoing(false)
             .build()
-        applicationContext.getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, notification)
+        applicationContext.getSystemService(NotificationManager::class.java).notify(operationNotificationId(), notification)
+    }
+
+    private fun operationNotificationId(): Int {
+        val id = currentOperationId.takeLast(8).toLongOrNull(16)?.toInt()?.and(0x7fffffff) ?: currentOperationId.hashCode().and(0x7fffffff)
+        return if (id == 0) 1 else id
     }
 
     private fun createChannel() {
@@ -451,6 +456,5 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
         const val TYPE_MOVE = "MOVE"
         const val TAG = "personal-gallery-file-operation"
         private const val CHANNEL_ID = "personal-gallery-file-operations"
-        private const val NOTIFICATION_ID = 4117
     }
 }
