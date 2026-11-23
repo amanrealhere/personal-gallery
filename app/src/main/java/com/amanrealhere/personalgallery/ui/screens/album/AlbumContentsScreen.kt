@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.layout.onSizeChanged
@@ -290,7 +291,7 @@ fun AlbumContentsScreen(
 
                 if (selectedPaths.isNotEmpty()) {
                     Surface(
-                        modifier = Modifier.align(Alignment.TopCenter).padding(8.dp).zIndex(4f),
+                        modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(8.dp).zIndex(4f),
                         shape = RoundedCornerShape(24.dp),
                         color = MaterialTheme.colorScheme.surfaceContainerHigh,
                         shadowElevation = 6.dp
