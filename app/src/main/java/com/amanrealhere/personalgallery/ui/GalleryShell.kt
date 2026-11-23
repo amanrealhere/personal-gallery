@@ -91,6 +91,15 @@ fun GalleryShell(viewModel: GalleryViewModel) {
         .getWorkInfosByTagFlow(MediaFileOperationWorker.TAG)
         .collectAsStateWithLifecycle(initialValue = emptyList())
     val latestFileOperationId by viewModel.latestFileOperationId.collectAsStateWithLifecycle()
+    var savedOperationResult by remember { mutableStateOf(JSONObject()) }
+    LaunchedEffect(latestFileOperationId, displayedFileOperation?.state) {
+        val id = latestFileOperationId
+        savedOperationResult = if (id == null) JSONObject() else withContext(Dispatchers.IO) {
+            val stateFile = File(context.filesDir, "media-operation-" + id + ".state.json")
+            runCatching { JSONObject(stateFile.readText()).optJSONObject("result") ?: JSONObject() }
+                .getOrElse { JSONObject() }
+        }
+    }
     val activeFileOperation = fileOperationWorkInfos.firstOrNull { it.state == WorkInfo.State.RUNNING }
     val displayedFileOperation = activeFileOperation
         ?: latestFileOperationId?.let { id -> fileOperationWorkInfos.firstOrNull { it.id.toString() == id } }
