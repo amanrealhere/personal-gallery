@@ -8,8 +8,10 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Box
 import androidx.compose.ui.Alignment
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -148,6 +150,7 @@ fun GalleryShell(viewModel: GalleryViewModel) {
         ?: savedOperationResult.optInt(MediaFileOperationWorker.KEY_PROGRESS_UNITS, fileOperationProcessed * 1000)
     val operationStartedAtMillis = savedOperationState.optLong("startedAtMillis", 0L)
     val operationDurationMs = savedOperationResult.optLong("durationMs", -1L)
+    val operationDurationMs = savedOperationResult.optLong("durationMs", -1L)
     val fileOperationStatus = if (displayedFileOperation?.state?.isFinished == true) {
         displayedFileOperation.outputData.getString(MediaFileOperationWorker.KEY_SUMMARY)
             ?: displayedFileOperation.outputData.getString(MediaFileOperationWorker.KEY_ERROR)
@@ -162,15 +165,16 @@ fun GalleryShell(viewModel: GalleryViewModel) {
     val operationLogScrollState = rememberScrollState()
     val operationDialogScrollState = rememberScrollState()
     var operationLaunchError by remember { mutableStateOf<String?>(null) }
-    val pendingToastOperationIds = remember { mutableSetOf<String>() }
+    var pendingToastOperationIds by remember { mutableStateOf(setOf<String>())
     LaunchedEffect(viewModel) {
-        launch { viewModel.fileOperationStartedIds.collect { pendingToastOperationIds.add(it) } }
+        launch { viewModel.fileOperationStartedIds.collect { pendingToastOperationIds = pendingToastOperationIds + it } }
         launch { viewModel.fileOperationMessages.collect { operationLaunchError = it; Toast.makeText(context, "Could not queue operation", Toast.LENGTH_SHORT).show() } }
     }
-    LaunchedEffect(fileOperationWorkInfos) {
+    LaunchedEffect(fileOperationWorkInfos, pendingToastOperationIds) {
         for (work in fileOperationWorkInfos.filter { it.state.isFinished }) {
             val id = work.id.toString()
-            if (!pendingToastOperationIds.remove(id)) continue
+            if (id !in pendingToastOperationIds) continue
+            pendingToastOperationIds = pendingToastOperationIds - id
             val type = work.outputData.getString(MediaFileOperationWorker.KEY_TYPE)
                 ?: work.inputData.getString(MediaFileOperationWorker.KEY_TYPE)
             val action = if (type == MediaFileOperationWorker.TYPE_MOVE) "Move" else "Copy"
