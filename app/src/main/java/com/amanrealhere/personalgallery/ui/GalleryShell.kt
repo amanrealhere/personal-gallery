@@ -403,7 +403,8 @@ fun GalleryShell(viewModel: GalleryViewModel) {
                         ?: displayedFileOperation?.inputData?.getString(MediaFileOperationWorker.KEY_TYPE)
                         ?: savedOperationResult.optString("type", "COPY")
                     val operationName = if (operationType == MediaFileOperationWorker.TYPE_MOVE) "Move" else "Copy"
-                    val savedSummary = savedOperationResult.optString("summary")
+                    val savedSummary = displayedFileOperation?.outputData?.getString(MediaFileOperationWorker.KEY_SUMMARY)
+                        ?: savedOperationResult.optString("summary")
                     val hasIssues = fileOperationFailed > 0 || savedSummary.contains("album refresh failure", ignoreCase = true)
                     val operationTitle = when {
                         operationFinished && workState == WorkInfo.State.FAILED -> "$operationName failed"
@@ -473,6 +474,8 @@ fun GalleryShell(viewModel: GalleryViewModel) {
                                     if (fileOperationDetail.isNotBlank()) {
                                         Text(fileOperationDetail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                     }
+                                } else if (savedSummary.isNotBlank()) {
+                                    Text(savedSummary, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                                     Text("Elapsed", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
