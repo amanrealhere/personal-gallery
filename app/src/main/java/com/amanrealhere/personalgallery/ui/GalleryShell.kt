@@ -9,6 +9,9 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Box
 import androidx.compose.ui.Alignment
@@ -75,13 +78,15 @@ import kotlinx.coroutines.withContext
 private enum class GalleryDestination { Albums, AddAlbum }
 
 @Composable
-private fun OperationLogText(text: String) {
+private fun OperationLogView(text: String) {
     val scheme = MaterialTheme.colorScheme
     val successColor = if (androidx.compose.foundation.isSystemInDarkTheme()) Color(0xFF9AD7A6) else Color(0xFF237A3B)
     val warningColor = if (androidx.compose.foundation.isSystemInDarkTheme()) Color(0xFFFFD180) else Color(0xFF9A5B00)
-    val annotated = buildAnnotatedString {
-        val lines = text.lines()
-        lines.forEachIndexed { index, line ->
+    val lines = remember(text) { text.lines() }
+    val listState = rememberLazyListState()
+    LaunchedEffect(lines.size) { if (lines.isNotEmpty()) listState.animateScrollToItem(lines.lastIndex) }
+    LazyColumn(state = listState, modifier = Modifier.fillMaxWidth().heightIn(max = 320.dp)) {
+        itemsIndexed(lines) { _, line ->
             val tag = Regex("\\[(.*?)\\]").findAll(line).lastOrNull()?.groupValues?.getOrNull(1).orEmpty()
             val lineColor = when (tag) {
                 "ERROR", "FAIL", "RECONCILE_FAIL", "INTERRUPTED" -> scheme.error
@@ -90,13 +95,10 @@ private fun OperationLogText(text: String) {
                 "VERIFY", "METHOD", "PUBLISH", "STATE" -> scheme.primary
                 else -> scheme.onSurfaceVariant
             }
-            withStyle(SpanStyle(color = lineColor)) { append(line) }
-            if (index < lines.lastIndex) append("\n")
+            Text(line, color = lineColor, style = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 11.sp, lineHeight = 14.sp))
         }
     }
-    Text(annotated, style = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 11.sp, lineHeight = 14.sp))
 }
-
 @Composable
 fun GalleryShell(viewModel: GalleryViewModel) {
     val context = LocalContext.current
@@ -135,18 +137,18 @@ fun GalleryShell(viewModel: GalleryViewModel) {
         }
         savedOperationResult = savedOperationState.optJSONObject("result") ?: JSONObject()
     }
-    val fileOperationProcessed = displayedFileOperation?.progress?.getInt(MediaFileOperationWorker.KEY_PROCESSED, 0)
-        ?: displayedFileOperation?.outputData?.getInt(MediaFileOperationWorker.KEY_PROCESSED, 0) ?: savedOperationResult.optInt("processed", 0)
-    val fileOperationTotal = displayedFileOperation?.progress?.getInt(MediaFileOperationWorker.KEY_TOTAL, 0)
-        ?: displayedFileOperation?.outputData?.getInt(MediaFileOperationWorker.KEY_TOTAL, 0) ?: savedOperationResult.optInt("total", 0)
-    val fileOperationSucceeded = displayedFileOperation?.progress?.getInt(MediaFileOperationWorker.KEY_SUCCEEDED, 0)
-        ?: displayedFileOperation?.outputData?.getInt(MediaFileOperationWorker.KEY_SUCCEEDED, 0) ?: savedOperationResult.optInt("succeeded", 0)
-    val fileOperationFailed = displayedFileOperation?.progress?.getInt(MediaFileOperationWorker.KEY_FAILED, 0)
-        ?: displayedFileOperation?.outputData?.getInt(MediaFileOperationWorker.KEY_FAILED, 0) ?: savedOperationResult.optInt("failed", 0)
+    val fileOperationProcessed = displayedFileOperation?.outputData?.getInt(MediaFileOperationWorker.KEY_PROCESSED, -1)?.takeIf { it >= 0 }
+        ?: displayedFileOperation?.progress?.getInt(MediaFileOperationWorker.KEY_PROCESSED, 0) ?: savedOperationResult.optInt("processed", 0)
+    val fileOperationTotal = displayedFileOperation?.outputData?.getInt(MediaFileOperationWorker.KEY_TOTAL, -1)?.takeIf { it >= 0 }
+        ?: displayedFileOperation?.progress?.getInt(MediaFileOperationWorker.KEY_TOTAL, 0) ?: savedOperationResult.optInt("total", 0)
+    val fileOperationSucceeded = displayedFileOperation?.outputData?.getInt(MediaFileOperationWorker.KEY_SUCCEEDED, -1)?.takeIf { it >= 0 }
+        ?: displayedFileOperation?.progress?.getInt(MediaFileOperationWorker.KEY_SUCCEEDED, 0) ?: savedOperationResult.optInt("succeeded", 0)
+    val fileOperationFailed = displayedFileOperation?.outputData?.getInt(MediaFileOperationWorker.KEY_FAILED, -1)?.takeIf { it >= 0 }
+        ?: displayedFileOperation?.progress?.getInt(MediaFileOperationWorker.KEY_FAILED, 0) ?: savedOperationResult.optInt("failed", 0)
     val fileOperationCurrent = displayedFileOperation?.progress?.getString(MediaFileOperationWorker.KEY_CURRENT).orEmpty()
     val fileOperationDetail = displayedFileOperation?.progress?.getString(MediaFileOperationWorker.KEY_DETAIL).orEmpty()
-    val fileOperationProgressUnits = displayedFileOperation?.progress?.getInt(MediaFileOperationWorker.KEY_PROGRESS_UNITS, fileOperationProcessed * 1000)
-        ?: displayedFileOperation?.outputData?.getInt(MediaFileOperationWorker.KEY_PROGRESS_UNITS, fileOperationProcessed * 1000)
+    val fileOperationProgressUnits = displayedFileOperation?.outputData?.getInt(MediaFileOperationWorker.KEY_PROGRESS_UNITS, -1)?.takeIf { it >= 0 }
+        ?: displayedFileOperation?.progress?.getInt(MediaFileOperationWorker.KEY_PROGRESS_UNITS, fileOperationProcessed * 1000)
         ?: savedOperationResult.optInt(MediaFileOperationWorker.KEY_PROGRESS_UNITS, fileOperationProcessed * 1000)
     val operationStartedAtElapsedRealtime = savedOperationState.optLong("startedElapsedRealtime", 0L)
     val operationDurationMs = savedOperationResult.optLong("durationMs", -1L)
@@ -161,7 +163,6 @@ fun GalleryShell(viewModel: GalleryViewModel) {
     var operationDialogVisible by remember { mutableStateOf(false) }
     var advancedLogVisible by remember { mutableStateOf(false) }
     var operationLogText by remember { mutableStateOf("") }
-    val operationLogScrollState = rememberScrollState()
     val operationDialogScrollState = rememberScrollState()
     var operationLaunchError by remember { mutableStateOf<String?>(null) }
     var pendingToastOperationIds by remember { mutableStateOf(setOf<String>())
@@ -190,9 +191,6 @@ fun GalleryShell(viewModel: GalleryViewModel) {
     }
     LaunchedEffect(latestFileOperationId) {
         if (latestFileOperationId != null) operationDialogVisible = true
-    }
-    LaunchedEffect(operationLogText, advancedLogVisible) {
-        if (advancedLogVisible) operationLogScrollState.animateScrollTo(operationLogScrollState.maxValue)
     }
     LaunchedEffect(displayedFileOperation?.id, displayedFileOperation?.progress, displayedFileOperation?.outputData, latestFileOperationId, advancedLogVisible) {
         if (!advancedLogVisible) {
@@ -491,9 +489,7 @@ fun GalleryShell(viewModel: GalleryViewModel) {
                                 }
                                 if (advancedLogVisible) {
                                     Text("Operation log", style = MaterialTheme.typography.titleSmall)
-                                    Column(Modifier.fillMaxWidth().heightIn(max = 320.dp).verticalScroll(operationLogScrollState)) {
-                                        OperationLogText(operationLogText)
-                                    }
+                                    OperationLogView(operationLogText)
                                 }
                             }
                         }
