@@ -104,13 +104,13 @@ fun GalleryShell(viewModel: GalleryViewModel) {
         }
     }
     val fileOperationProcessed = displayedFileOperation?.progress?.getInt(MediaFileOperationWorker.KEY_PROCESSED, 0)
-        ?: displayedFileOperation?.outputData?.getInt(MediaFileOperationWorker.KEY_PROCESSED, 0) ?: 0
+        ?: displayedFileOperation?.outputData?.getInt(MediaFileOperationWorker.KEY_PROCESSED, 0) ?: savedOperationResult.optInt("processed", 0)
     val fileOperationTotal = displayedFileOperation?.progress?.getInt(MediaFileOperationWorker.KEY_TOTAL, 0)
-        ?: displayedFileOperation?.outputData?.getInt(MediaFileOperationWorker.KEY_TOTAL, 0) ?: 0
+        ?: displayedFileOperation?.outputData?.getInt(MediaFileOperationWorker.KEY_TOTAL, 0) ?: savedOperationResult.optInt("total", 0)
     val fileOperationSucceeded = displayedFileOperation?.progress?.getInt(MediaFileOperationWorker.KEY_SUCCEEDED, 0)
-        ?: displayedFileOperation?.outputData?.getInt(MediaFileOperationWorker.KEY_SUCCEEDED, 0) ?: 0
+        ?: displayedFileOperation?.outputData?.getInt(MediaFileOperationWorker.KEY_SUCCEEDED, 0) ?: savedOperationResult.optInt("succeeded", 0)
     val fileOperationFailed = displayedFileOperation?.progress?.getInt(MediaFileOperationWorker.KEY_FAILED, 0)
-        ?: displayedFileOperation?.outputData?.getInt(MediaFileOperationWorker.KEY_FAILED, 0) ?: 0
+        ?: displayedFileOperation?.outputData?.getInt(MediaFileOperationWorker.KEY_FAILED, 0) ?: savedOperationResult.optInt("failed", 0)
     val fileOperationCurrent = displayedFileOperation?.progress?.getString(MediaFileOperationWorker.KEY_CURRENT).orEmpty()
     val fileOperationStatus = if (displayedFileOperation?.state?.isFinished == true) {
         displayedFileOperation.outputData.getString(MediaFileOperationWorker.KEY_SUMMARY)
@@ -118,7 +118,7 @@ fun GalleryShell(viewModel: GalleryViewModel) {
             ?: displayedFileOperation.state.name
     } else {
         displayedFileOperation?.progress?.getString(MediaFileOperationWorker.KEY_STATUS)
-            ?: if (displayedFileOperation != null) displayedFileOperation.state.name else ""
+            ?: if (displayedFileOperation != null) displayedFileOperation.state.name else savedOperationResult.optString("summary").takeIf { it.isNotBlank() } ?: "Saved operation log; WorkManager record is unavailable"
     }
     var operationDialogVisible by remember { mutableStateOf(false) }
     var operationLogText by remember { mutableStateOf("Loading operation log…") }
