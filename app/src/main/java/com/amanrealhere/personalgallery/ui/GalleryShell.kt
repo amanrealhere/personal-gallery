@@ -33,7 +33,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import android.widget.Toast
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -93,6 +92,10 @@ fun GalleryShell(viewModel: GalleryViewModel) {
         ?: if (displayedFileOperation != null) displayedFileOperation.state.name else ""
     var operationDialogVisible by remember { mutableStateOf(false) }
     var operationLogText by remember { mutableStateOf("Loading operation log…") }
+    var operationLaunchError by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(viewModel) {
+        viewModel.fileOperationMessages.collect { operationLaunchError = it }
+    }
     LaunchedEffect(latestFileOperationId) {
         if (latestFileOperationId != null) operationDialogVisible = true
     }
@@ -282,6 +285,17 @@ fun GalleryShell(viewModel: GalleryViewModel) {
                             }
                         )
                     }
+                }
+
+                if (operationLaunchError != null) {
+                    AlertDialog(
+                        onDismissRequest = {},
+                        title = { Text("File operation could not be queued") },
+                        text = { Text(operationLaunchError.orEmpty()) },
+                        confirmButton = {
+                            TextButton(onClick = { operationLaunchError = null }) { Text("Close") }
+                        }
+                    )
                 }
 
                 if (displayedFileOperation != null && operationDialogVisible) {
