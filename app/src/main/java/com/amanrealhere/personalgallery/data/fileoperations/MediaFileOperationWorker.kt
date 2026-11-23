@@ -24,6 +24,7 @@ import org.json.JSONObject
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
+import java.io.RandomAccessFile
 import java.io.IOException
 import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.Files
@@ -543,7 +544,16 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
     }
 
     private fun logPreview(): String = try {
-        operationLog.readLines().takeLast(8).joinToString("\n").takeLast(1800)
+        RandomAccessFile(operationLog, "r").use { file ->
+            val maxBytes = 8192L
+            val start = (file.length() - maxBytes).coerceAtLeast(0L)
+            file.seek(start)
+            if (start > 0L) file.readLine()
+            val remaining = (file.length() - file.filePointer).coerceAtMost(maxBytes).toInt()
+            val bytes = ByteArray(remaining)
+            file.readFully(bytes)
+            String(bytes, Charsets.UTF_8).takeLast(1800)
+        }
     } catch (_: Exception) {
         "Detailed operation log is being written."
     }
