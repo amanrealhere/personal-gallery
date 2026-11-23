@@ -84,9 +84,15 @@ class GalleryViewModel(
                 val output = finishedWork.outputData
                 val succeeded = output.getInt(MediaFileOperationWorker.KEY_SUCCEEDED, 0)
                 val failed = output.getInt(MediaFileOperationWorker.KEY_FAILED, uniqueSources.size)
-                val errors = output.getString(MediaFileOperationWorker.KEY_ERRORS).orEmpty()
                 val errorMessage = output.getString(MediaFileOperationWorker.KEY_ERROR)
-                val firstItemError = errors.lineSequence().firstOrNull()?.trim()
+                val logPath = output.getString(MediaFileOperationWorker.KEY_LOG_PATH)
+                    ?: File(getApplication<Application>().filesDir, "media-operation-$operationId.log").absolutePath
+                val detailedLog = withContext(Dispatchers.IO) {
+                    runCatching { File(logPath).takeIf { it.isFile }?.readText().orEmpty() }.getOrDefault("")
+                }
+                val firstItemError = detailedLog.lineSequence()
+                    .firstOrNull { it.contains("[FAIL]") }
+                    ?.substringAfter("[FAIL]")?.trim()
 
                 // Refresh the registered albums affected by these paths, then update their covers.
                 val sourceAlbums = albums.value.filter { album ->
@@ -95,10 +101,17 @@ class GalleryViewModel(
                     }
                 }
                 val affectedAlbums = (sourceAlbums + destinationAlbum).distinctBy { it.id }
+                val reconciliationFailures = mutableListOf<String>()
                 withContext(Dispatchers.IO) {
                     for (album in affectedAlbums) {
-                        mediaIndexRepository.reconcileAlbum(album.id, File(album.canonicalPath))
-                        ThumbnailWorkScheduler.enqueueAlbum(getApplication(), album.id, force = false)
+                        try {
+                            mediaIndexRepository.reconcileAlbum(album.id, File(album.canonicalPath))
+                            ThumbnailWorkScheduler.enqueueAlbum(getApplication(), album.id, force = false)
+                        } catch (exception: CancellationException) {
+                            throw exception
+                        } catch (exception: Exception) {
+                            reconciliationFailures += "${album.name}: ${exception.message ?: "index refresh failed"}"
+                        }
                     }
                 }
 
@@ -112,7 +125,9 @@ class GalleryViewModel(
                 } else {
                     "$verb ${succeeded} of ${uniqueSources.size}; ${failed} failed"
                 }
-                _fileOperationMessages.emit(message)
+                val finalMessage = if (reconciliationFailures.isEmpty()) message
+                    else "$message · Index refresh incomplete: ${reconciliationFailures.joinToString("; ")}"
+                _fileOperationMessages.emit(finalMessage)
             } catch (exception: CancellationException) {
                 throw exception
             } catch (exception: Exception) {
