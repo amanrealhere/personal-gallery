@@ -149,12 +149,13 @@ fun GalleryShell(viewModel: GalleryViewModel) {
     LaunchedEffect(operationLogText) {
         operationLogScrollState.animateScrollTo(operationLogScrollState.maxValue)
     }
-    LaunchedEffect(displayedFileOperation?.id, displayedFileOperation?.progress, displayedFileOperation?.outputData) {
+    LaunchedEffect(displayedFileOperation?.id, displayedFileOperation?.progress, displayedFileOperation?.outputData, latestFileOperationId) {
         val work = displayedFileOperation
-        operationLogText = if (work == null) "" else withContext(Dispatchers.IO) {
-            val logFile = File(context.filesDir, "media-operation-${work.id}.log")
+        val operationId = work?.id?.toString() ?: latestFileOperationId
+        operationLogText = if (operationId == null) "" else withContext(Dispatchers.IO) {
+            val logFile = File(context.filesDir, "media-operation-${operationId}.log")
             if (logFile.isFile) runCatching {
-                if (work.state.isFinished) logFile.readText() else readOperationLogTail(logFile, 64 * 1024)
+                if (work == null || work.state.isFinished) logFile.readText() else readOperationLogTail(logFile, 64 * 1024)
             }.getOrElse { "Unable to read detailed log: ${it.message}" }
             else "Operation log has not been created yet."
         }
