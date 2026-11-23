@@ -397,17 +397,19 @@ fun GalleryShell(viewModel: GalleryViewModel) {
 
                 if (latestFileOperationId != null && operationDialogVisible) {
                     val workState = displayedFileOperation?.state
-                    val operationFinished = workState?.isFinished == true
+                    val operationFinished = workState?.isFinished == true || savedOperationResult.optString("status") == "COMPLETED"
                     val operationRunning = workState == WorkInfo.State.RUNNING
                     val operationType = displayedFileOperation?.outputData?.getString(MediaFileOperationWorker.KEY_TYPE)
                         ?: displayedFileOperation?.inputData?.getString(MediaFileOperationWorker.KEY_TYPE)
                         ?: savedOperationResult.optString("type", "COPY")
                     val operationName = if (operationType == MediaFileOperationWorker.TYPE_MOVE) "Move" else "Copy"
+                    val savedSummary = savedOperationResult.optString("summary")
+                    val hasIssues = fileOperationFailed > 0 || savedSummary.contains("album refresh failure", ignoreCase = true)
                     val operationTitle = when {
-                        operationFinished && workState == WorkInfo.State.SUCCEEDED && fileOperationFailed == 0 -> "$operationName completed"
-                        operationFinished && workState == WorkInfo.State.SUCCEEDED -> "$operationName finished with errors"
                         operationFinished && workState == WorkInfo.State.FAILED -> "$operationName failed"
                         operationFinished && workState == WorkInfo.State.CANCELLED -> "$operationName cancelled"
+                        operationFinished && hasIssues -> "$operationName finished with errors"
+                        operationFinished -> "$operationName completed"
                         operationType == MediaFileOperationWorker.TYPE_MOVE -> "Moving images"
                         else -> "Copying images"
                     }
