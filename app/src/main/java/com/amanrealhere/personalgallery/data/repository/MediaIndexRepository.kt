@@ -2,6 +2,7 @@ package com.amanrealhere.personalgallery.data.repository
 
 import com.amanrealhere.personalgallery.data.local.MediaItemDao
 import com.amanrealhere.personalgallery.data.local.MediaItemStagingEntity
+import android.os.Environment
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.async
@@ -50,6 +51,15 @@ class MediaIndexRepository(private val mediaItemDao: MediaItemDao) {
     ): ScanResult {
         val scanToken = UUID.randomUUID().toString()
         mediaItemDao.clearStaging(scanToken)
+        val appStorageRoot = File(
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES),
+            ".personal-gallery"
+        ).canonicalFile
+        val folderCanonicalPath = try { folder.canonicalPath } catch (_: Exception) { return ScanResult.Unavailable }
+        val appStoragePrefix = appStorageRoot.path.trimEnd(File.separatorChar) + File.separator
+        if (folderCanonicalPath == appStorageRoot.path || folderCanonicalPath.startsWith(appStoragePrefix)) {
+            return ScanResult.Unavailable
+        }
         if (!folder.isDirectory || !folder.canRead()) return ScanResult.Unavailable
 
         val complete = AtomicBoolean(true)
@@ -88,7 +98,7 @@ class MediaIndexRepository(private val mediaItemDao: MediaItemDao) {
                                     for (entry in entries) {
                                         currentCoroutineContext().ensureActive()
                                         val child = entry.toFile()
-                                        if (child.name == ".personal-gallery") continue
+                                        if (child.name == ".personal-gallery" || child.name == ".thumbnails") continue
 
                                         // Directories must be discovered regardless of name;
                                         // supported image candidates receive full metadata reads.
