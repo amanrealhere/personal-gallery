@@ -375,7 +375,7 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
             .setContentText(summary)
             .setStyle(NotificationCompat.BigTextStyle().bigText("$summary\n\n${logPreview()}\nFull log: ${operationLog.name}"))
             .setAutoCancel(false)
-            .setOngoing(true)
+            .setOngoing(false)
             .build()
         applicationContext.getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, notification)
     }
