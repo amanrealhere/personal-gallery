@@ -80,7 +80,7 @@ private fun OperationLogView(text: String) {
     val warningColor = if (androidx.compose.foundation.isSystemInDarkTheme()) Color(0xFFFFD180) else Color(0xFF9A5B00)
     val lines = remember(text) { text.lines() }
     val listState = rememberLazyListState()
-    LaunchedEffect(lines.size) { if (lines.isNotEmpty()) listState.animateScrollToItem(lines.lastIndex) }
+    LaunchedEffect(text) { if (lines.isNotEmpty()) listState.animateScrollToItem(lines.lastIndex) }
     LazyColumn(state = listState, modifier = Modifier.fillMaxWidth().heightIn(max = 320.dp)) {
         itemsIndexed(lines) { _, line ->
             val tag = Regex("\\[(.*?)\\]").findAll(line).lastOrNull()?.groupValues?.getOrNull(1).orEmpty()
@@ -417,8 +417,9 @@ fun GalleryShell(viewModel: GalleryViewModel) {
                     val progressFraction = (fileOperationProgressUnits.toFloat() / totalUnits).coerceIn(0f, 1f)
                     val progressPercent = (progressFraction * 100f).toInt()
                     val startTime = operationStartedAtElapsedRealtime.takeIf { it > 0L } ?: 0L
-                    var stopwatchNow by remember(latestFileOperationId) { mutableStateOf(SystemClock.elapsedRealtime()) }
-                    var frozenElapsed by remember(latestFileOperationId) { mutableStateOf<Long?>(null) }
+                    val displayedOperationId = displayedFileOperation?.id?.toString() ?: latestFileOperationId
+                    var stopwatchNow by remember(displayedOperationId) { mutableStateOf(SystemClock.elapsedRealtime()) }
+                    var frozenElapsed by remember(displayedOperationId) { mutableStateOf<Long?>(null) }
                     LaunchedEffect(workState, startTime, operationDurationMs) {
                         if (operationFinished) {
                             frozenElapsed = if (operationDurationMs >= 0L) operationDurationMs
