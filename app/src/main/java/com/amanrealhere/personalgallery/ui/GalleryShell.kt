@@ -89,7 +89,8 @@ fun GalleryShell(viewModel: GalleryViewModel) {
         ?: displayedFileOperation?.outputData?.getInt(MediaFileOperationWorker.KEY_FAILED, 0) ?: 0
     val fileOperationCurrent = displayedFileOperation?.progress?.getString(MediaFileOperationWorker.KEY_CURRENT).orEmpty()
     val fileOperationStatus = if (displayedFileOperation?.state?.isFinished == true) {
-        displayedFileOperation.outputData.getString(MediaFileOperationWorker.KEY_SUMMARY)
+        displayedFileOperation.outputData.getString(MediaFileOperation.KEY_SUMMARY)
+            ?: displayedFileOperation.outputData.getString(MediaFileOperation.KEY_ERROR)
             ?: displayedFileOperation.state.name
     } else {
         displayedFileOperation?.progress?.getString(MediaFileOperationWorker.KEY_STATUS)
