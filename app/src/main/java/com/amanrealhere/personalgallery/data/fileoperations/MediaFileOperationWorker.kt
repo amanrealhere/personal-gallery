@@ -12,6 +12,7 @@ import com.amanrealhere.personalgallery.data.repository.MediaIndexRepository
 import com.amanrealhere.personalgallery.data.thumbnail.ThumbnailWorkScheduler
 import kotlinx.coroutines.flow.first
 import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
 import androidx.work.CoroutineWorker
 import androidx.work.ForegroundInfo
 import androidx.work.WorkerParameters
@@ -715,5 +716,14 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
         const val TYPE_MOVE = "MOVE"
         const val TAG = "personal-gallery-file-operation"
         private const val CHANNEL_ID = "personal-gallery-file-operations"
+
+        fun areNotificationsEnabled(context: Context): Boolean {
+            if (!NotificationManagerCompat.from(context).areNotificationsEnabled()) return false
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val channel = context.getSystemService(NotificationManager::class.java).getNotificationChannel(CHANNEL_ID)
+                if (channel != null && channel.importance == NotificationManager.IMPORTANCE_NONE) return false
+            }
+            return true
+        }
     }
 }
