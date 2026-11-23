@@ -288,7 +288,23 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
         try {
             FileInputStream(source).use { input ->
                 FileOutputStream(temporary).use { output ->
-                    input.copyTo(output, 1024 * 1024)
+                    val buffer = ByteArray(1024 * 1024)
+                    var copied = 0L
+                    var lastProgressAt = 0L
+                    while (true) {
+                        currentCoroutineContext().ensureActive()
+                        if (isStopped) throw CancellationException("File copy stopped")
+                        val count = input.read(buffer)
+                        if (count < 0) break
+                        output.write(buffer, 0, count)
+                        copied += count
+                        val now = System.currentTimeMillis()
+                        if (now - lastProgressAt >= 1_000L || copied == expectedSize) {
+                            log("PROGRESS", "Copied " + copied + " / " + expectedSize + " bytes for " + source.name)
+                            publishProgress(processed, total, succeeded, failed, source.name, "Copying " + source.name + " · " + copied + " / " + expectedSize + " bytes")
+                            lastProgressAt = now
+                        }
+                    }
                     output.fd.sync()
                 }
             }
