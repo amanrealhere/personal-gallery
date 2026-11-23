@@ -9,6 +9,7 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Matrix
 import android.os.Build
+import android.os.Environment
 import androidx.core.app.NotificationCompat
 import androidx.exifinterface.media.ExifInterface
 import androidx.work.CoroutineWorker
@@ -393,8 +394,23 @@ class ThumbnailGenerationWorker(
         var latest: File? = null
         var latestModified = Long.MIN_VALUE
         var complete = true
+        val appStorageRoot = runCatching {
+            File(
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES),
+                ".personal-gallery"
+            ).canonicalPath
+        }.getOrNull()
+        if (appStorageRoot == null) complete = false
         val walk = folder.walkTopDown()
-            .onEnter { it.name != ".personal-gallery" }
+            .onEnter { directory ->
+                val canonicalPath = runCatching { directory.canonicalPath }.getOrNull()
+                if (canonicalPath == null) {
+                    complete = false
+                    true
+                } else {
+                    canonicalPath != appStorageRoot
+                }
+            }
             .onFail { _, _ -> complete = false }
 
         for (file in walk) {
