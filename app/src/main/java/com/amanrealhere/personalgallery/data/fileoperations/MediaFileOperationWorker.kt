@@ -127,6 +127,17 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
             val action = if (type == TYPE_MOVE) "Move" else "Copy"
             publishProgress(processed, total, succeeded, failed, source.name, "Preparing $action")
             log("FILE", "$action started: ${source.absolutePath}")
+            if (galleryOwnedRoot != null) {
+                val sourceCanonical = runCatching { source.canonicalPath }.getOrNull()
+                if (sourceCanonical == galleryOwnedRoot ||
+                    (sourceCanonical != null && sourceCanonical.startsWith(galleryOwnedPrefix))) {
+                    failed++
+                    processed++
+                    log("FAIL", "App-owned storage is not a valid source: ${source.absolutePath}")
+                    publishProgress(processed, total, succeeded, failed, source.name, "Rejected app-owned source")
+                    continue
+                }
+            }
             try {
                 var plan = plans.optJSONObject(sourcePath)
                 if (plan == null) {
