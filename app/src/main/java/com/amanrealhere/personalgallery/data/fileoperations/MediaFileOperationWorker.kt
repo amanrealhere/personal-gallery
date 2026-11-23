@@ -81,6 +81,22 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
             postCompletionNotification(type, message)
             return@withContext Result.failure(workDataOf(KEY_ERROR to message))
         }
+        val galleryOwnedRoot = runCatching {
+            File(
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES),
+                ".personal-gallery"
+            ).canonicalPath
+        }.getOrNull()
+        val destinationCanonical = runCatching { destinationDirectory.canonicalPath }.getOrNull()
+        val galleryOwnedPrefix = galleryOwnedRoot?.trimEnd(File.separatorChar) + File.separator
+        if (galleryOwnedRoot != null && destinationCanonical != null &&
+            (destinationCanonical == galleryOwnedRoot || destinationCanonical.startsWith(galleryOwnedPrefix))) {
+            val message = "Operation failed: Personal Gallery's own storage cannot be a file-operation destination"
+            log("ERROR", message + ": " + destinationCanonical)
+            requestFile.delete()
+            postCompletionNotification(type, message)
+            return@withContext Result.failure(workDataOf(KEY_ERROR to message))
+        }
 
         operationState = if (stateFile.isFile) {
             try {
