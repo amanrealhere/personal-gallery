@@ -29,7 +29,7 @@ class MediaGridPagingAdapter(
 
     fun updateSelection(paths: Set<String>, onToggle: (String) -> Unit) {
         val previousMode = selectionMode
-        val changedPaths = selectedPaths xor paths
+        val changedPaths = (selectedPaths - paths) + (paths - selectedPaths)
         selectedPaths = paths
         selectionMode = paths.isNotEmpty()
         onToggleSelection = onToggle
