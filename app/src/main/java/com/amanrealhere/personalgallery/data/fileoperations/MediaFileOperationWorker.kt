@@ -56,6 +56,7 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         val operationId = inputData.getString(KEY_OPERATION_ID) ?: return@withContext Result.failure()
         currentOperationId = operationId
+        currentType = inputData.getString(KEY_TYPE) ?: TYPE_COPY
         operationLog = File(applicationContext.filesDir, "media-operation-$operationId.log")
         stateFile = File(applicationContext.filesDir, "media-operation-$operationId.state.json")
         val requestFile = File(applicationContext.filesDir, "media-operation-$operationId.json")
@@ -330,7 +331,7 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
         val copyCount = methodCounts.count { it == "copy" }
         val atomicMoveCount = methodCounts.count { it == "atomic-rename" }
         val fallbackMoveCount = methodCounts.count { it == "copy-delete" }
-        val recoveredMoveCount = methodCounts.count { it == "recovered" || it == "unknown-move" }
+        val recoveredMoveCount = methodCounts.count { it == "recovered" || it == "unknown-move" || it == "verified" }
         val methodSummary = if (type == TYPE_MOVE) "$atomicMoveCount atomic rename(s) · $fallbackMoveCount copy-and-delete move(s) · $recoveredMoveCount recovered move(s)" else "$copyCount copied"
         val verificationSummary = "$succeeded file(s) verified (name, size, mtime-to-seconds)"
         val summary = "$succeeded succeeded, $failed failed, $processed of $total processed · $methodSummary · $verificationSummary$reconciliationSuffix"
