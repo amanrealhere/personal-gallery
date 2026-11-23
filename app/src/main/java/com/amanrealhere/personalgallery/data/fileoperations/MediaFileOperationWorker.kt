@@ -261,7 +261,7 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
             val expectedDestinationName = File(destinationPath).name
             Files.move(temporary.toPath(), destination.toPath())
             log("PUBLISH", "Temporary file published using same-directory filesystem move")
-            if (!verifyDestination(destination, expectedDestinationName, expectedSize, expectedMtimeSeconds) {
+            if (!verifyDestination(destination, expectedDestinationName, expectedSize, expectedMtimeSeconds)) {
                 throw IllegalStateException("Published destination verification failed")
             }
             log("VERIFY", "Published destination verified: name=${destination.name}; size=${destination.length()}; mtime(s)= ${destination.lastModified()/1000L}")
