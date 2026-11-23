@@ -46,6 +46,7 @@ object MediaFileOperationScheduler {
                 MediaFileOperationWorker.KEY_TYPE to type
             ))
             .addTag(MediaFileOperationWorker.TAG)
+            .addTag(if (type == MediaFileOperationWorker.TYPE_MOVE) MediaFileOperationWorker.TAG_MOVE else MediaFileOperationWorker.TAG_COPY)
             .build()
         try {
             WorkManager.getInstance(context).enqueueUniqueWork(
