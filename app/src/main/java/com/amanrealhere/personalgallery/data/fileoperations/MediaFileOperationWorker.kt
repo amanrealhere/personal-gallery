@@ -171,7 +171,7 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
                 persistState()
                 log("PLAN", "Execution marked started and plan persisted for ${source.name}")
                 val result = if (type == TYPE_MOVE) {
-                    moveOne(source, destinationDirectory, plan.getString("destination"), expectedSize, expectedMtimeSeconds, index, total, succeeded, failed)
+                    moveOne(source, destinationDirectory, plan.getString("destination"), expectedSize, expectedMtimeSeconds, sourcePath, plan, index, total, succeeded, failed)
                 } else {
                     copyOne(source, destinationDirectory, plan.getString("destination"), expectedSize, expectedMtimeSeconds, sourcePath, plan)
                 }
@@ -309,6 +309,8 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
         destinationPath: String,
         expectedSize: Long,
         expectedMtimeSeconds: Long,
+        sourcePath: String,
+        plan: JSONObject,
         processed: Int,
         total: Int,
         succeeded: Int,
@@ -346,7 +348,7 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
 
         publishProgress(processed, total, succeeded, failed, source.name, "Copying before deleting source")
         setForeground(createForegroundInfo(TYPE_MOVE, processed, total, "Fallback copy · ${source.name}"))
-        val copied = copyOne(source, destinationDirectory, destinationPath, expectedSize, expectedMtimeSeconds, source.absolutePath, plans.optJSONObject(source.absolutePath) ?: JSONObject())
+        val copied = copyOne(source, destinationDirectory, destinationPath, expectedSize, expectedMtimeSeconds, sourcePath, plan)
         if (!verifyDestination(copied, expectedDestinationName, expectedSize, expectedMtimeSeconds)) {
             throw IllegalStateException("Destination verification failed; original retained")
         }
