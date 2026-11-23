@@ -151,8 +151,10 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
                         if (source.length() != expectedSize || source.lastModified() / 1000L != expectedMtimeSeconds) {
                             throw IllegalStateException("Source changed since the operation was planned; source retained during recovery")
                         }
-                        log("RECOVERY", "Verified planned destination from an interrupted Move; source still matches planned size/mtime, removing source")
+                        log("RECOVERY", "Verified destination from an interrupted Move; source still matches planned name/size/mtime-to-seconds, removing source")
                         if (!source.delete() || source.exists()) throw IllegalStateException("Verified destination but could not delete source during recovery")
+                    } else {
+                        log("RECOVERY", "Verified published destination from an interrupted Copy; source remains untouched")
                     }
                     markCompleted(sourcePath, destination, expectedSize, expectedMtimeSeconds, "recovered")
                     succeeded++
