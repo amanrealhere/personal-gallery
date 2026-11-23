@@ -51,7 +51,10 @@ class GalleryViewModel(
     private val _fileOperationMessages = MutableSharedFlow<String>(extraBufferCapacity = 4)
     val fileOperationMessages = _fileOperationMessages.asSharedFlow()
 
-    private val _latestFileOperationId = MutableStateFlow<String?>(null)
+    private val operationPreferences = application.getSharedPreferences("file-operation-ui", Application.MODE_PRIVATE)
+    private val _latestFileOperationId = MutableStateFlow<String?>(
+        operationPreferences.getString("latest_operation_id", null)
+    )
     val latestFileOperationId: StateFlow<String?> = _latestFileOperationId.asStateFlow()
 
     fun startFileOperation(type: String, sourcePaths: List<String>, destinationAlbum: Album) {
@@ -72,6 +75,7 @@ class GalleryViewModel(
                     )
                 }
                 _latestFileOperationId.value = operationId
+                operationPreferences.edit().putString("latest_operation_id", operationId).apply()
                 val workManager = WorkManager.getInstance(getApplication<Application>())
                 val finishedWork = workManager.getWorkInfosByTagFlow(MediaFileOperationWorker.TAG)
                     .first { infos -> infos.any { it.id.toString() == operationId && it.state.isFinished } }
