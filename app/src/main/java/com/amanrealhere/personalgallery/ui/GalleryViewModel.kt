@@ -37,6 +37,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 
 class GalleryViewModel(
@@ -189,6 +190,8 @@ class GalleryViewModel(
         _isIndexingAlbum.value = true
         indexingJob = viewModelScope.launch(Dispatchers.IO) {
             try {
+                awaitFileOperationsIdle()
+                if (indexingAlbumId != album.id || !isActive) return@launch
                 val result = mediaIndexRepository.reconcileAlbum(
                     albumId = album.id,
                     folder = File(album.canonicalPath),
@@ -232,6 +235,23 @@ class GalleryViewModel(
         _scanFinished.value = false
         _scanComplete.value = false
         selectedAlbumId.value = null
+    }
+
+    /**
+     * File-operation workers perform their own durable reconciliation. Album
+     * browsing scans wait until the operation chain is idle so the filesystem
+     * cannot be scanned halfway through a multi-file Copy/Move batch.
+     */
+    private suspend fun awaitFileOperationsIdle() {
+        WorkManager.getInstance(getApplication<Application>())
+            .getWorkInfosByTagFlow(MediaFileOperationWorker.TAG)
+            .first { infos ->
+                infos.none {
+                    it.state == WorkInfo.State.RUNNING ||
+                        it.state == WorkInfo.State.ENQUEUED ||
+                        it.state == WorkInfo.State.BLOCKED
+                }
+            }
     }
 
     private suspend fun ensureAlbumCoverNow(albumId: String) {
