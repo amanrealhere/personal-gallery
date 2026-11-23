@@ -282,9 +282,15 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
         val verificationSummary = "$succeeded file(s) passed filename, size, and mtime-to-seconds verification"
         val summary = "$succeeded succeeded, $failed failed, $processed of $total processed · $verificationSummary$reconciliationSuffix"
         log("SUMMARY", summary)
-        if (reconciliationFailures > 0 && runAttemptCount < 2) {
-            log("RETRY", "Retrying durable album reconciliation (attempt ${runAttemptCount + 1})")
-            return@withContext Result.retry()
+        if (reconciliationFailures > 0) {
+            val reconciliationAttempt = operationState.optInt("reconciliationAttempts", 0) + 1
+            operationState.put("reconciliationAttempts", reconciliationAttempt)
+            persistState()
+            if (reconciliationAttempt < 3) {
+                log("RETRY", "Retrying durable album reconciliation (attempt ${reconciliationAttempt} of 3; independent of interrupted file-operation retries)")
+                return@withContext Result.retry()
+            }
+            log("RECONCILE_FAIL", "Reconciliation retry limit reached; pending refresh is reported in the operation summary")
         }
         requestFile.delete()
         postCompletionNotification(type, summary)
