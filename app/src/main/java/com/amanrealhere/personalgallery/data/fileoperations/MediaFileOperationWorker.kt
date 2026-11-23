@@ -88,7 +88,7 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
             ).canonicalPath
         }.getOrNull()
         val destinationCanonical = runCatching { destinationDirectory.canonicalPath }.getOrNull()
-        val galleryOwnedPrefix = galleryOwnedRoot?.trimEnd(File.separatorChar) + File.separator
+        val galleryOwnedPrefix = galleryOwnedRoot?.let { it.trimEnd(File.separatorChar) + File.separator } ?: ""
         if (galleryOwnedRoot != null && destinationCanonical != null &&
             (destinationCanonical == galleryOwnedRoot || destinationCanonical.startsWith(galleryOwnedPrefix))) {
             val message = "Operation failed: Personal Gallery's own storage cannot be a file-operation destination"
