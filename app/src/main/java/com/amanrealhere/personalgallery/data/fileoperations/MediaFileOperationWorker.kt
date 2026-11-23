@@ -4,6 +4,8 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
 import android.os.Build
+import android.os.SystemClock
+import android.app.PendingIntent
 import android.os.Environment
 import com.amanrealhere.personalgallery.PersonalGalleryApplication
 import com.amanrealhere.personalgallery.data.repository.MediaIndexRepository
@@ -110,8 +112,10 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
         } else JSONObject()
         plans = operationState.optJSONObject("plans") ?: JSONObject()
         completed = operationState.optJSONObject("completed") ?: JSONObject()
-        operationStartedAtMillis = operationState.optLong("startedAtMillis", 0L).takeIf { it > 0L } ?: System.currentTimeMillis()
-        operationState.put("startedAtMillis", operationStartedAtMillis)
+        val persistedElapsedStart = operationState.optLong("startedElapsedRealtime", 0L)
+        operationStartedAtMillis = persistedElapsedStart.takeIf { it > 0L && SystemClock.elapsedRealtime() >= it } ?: SystemClock.elapsedRealtime()
+        operationState.put("startedElapsedRealtime", operationStartedAtMillis)
+        operationState.put("startedAtMillis", System.currentTimeMillis())
         persistState()
 
         val total = sourcePaths.length()
@@ -342,7 +346,7 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
             .put("failed", failed)
             .put("status", "COMPLETED")
             .put("finishedAtMillis", System.currentTimeMillis())
-            .put("durationMs", (System.currentTimeMillis() - operationStartedAtMillis).coerceAtLeast(0L)))
+            .put("durationMs", (SystemClock.elapsedRealtime() - operationStartedAtMillis).coerceAtLeast(0L)))
         persistState()
         requestFile.delete()
         postCompletionNotification(type, summary)
@@ -372,7 +376,7 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
         val destination = File(destinationPath)
         val temporary = File(destinationDirectory, ".personal-gallery-$currentOperationId-${UUID.randomUUID()}.tmp")
         log("COPY", "Copying to temporary file: ${temporary.name}; expected name=${destination.name}; size=$expectedSize; mtime(s)=$expectedMtimeSeconds")
-        publishProgress(processed, total, succeeded, failed, source.name, "Copying", 0, "Writing temporary copy")
+        publishProgress(processed, total, succeeded, failed, source.name, "Copying", 0, if (currentType == TYPE_MOVE) "Fallback · writing copy before deleting source" else "Writing temporary copy")
         try {
             FileInputStream(source).use { input ->
                 FileOutputStream(temporary).use { output ->
@@ -391,20 +395,20 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
                             log("PROGRESS", "Copied " + copied + " / " + expectedSize + " bytes for " + source.name)
                             val filePercent = if (expectedSize > 0L) ((copied * 100L) / expectedSize).coerceIn(0L, 100L).toInt() else 0
                             val fileProgress = if (expectedSize > 0L) ((copied * 1000L) / expectedSize).coerceIn(0L, 999L).toInt() else 0
-                            publishProgress(processed, total, succeeded, failed, source.name, "Copying", fileProgress, "$filePercent% · writing temporary copy")
+                            publishProgress(processed, total, succeeded, failed, source.name, "Copying", fileProgress, "$filePercent% · " + if (currentType == TYPE_MOVE) "copying before deleting source" else "writing temporary copy")
                             lastProgressAt = now
                         }
                     }
                     output.fd.sync()
                 }
             }
-            setForeground(createForegroundInfo(currentType, processed, total, processed * 1000, "Verifying " + source.name, "Checking size and source metadata"))
+            publishProgress(processed, total, succeeded, failed, source.name, "Verifying", 0, if (currentType == TYPE_MOVE) "Checking fallback copy before source deletion" else "Checking size and source metadata")
             if (temporary.length() != expectedSize) throw IllegalStateException("Temporary size verification failed (expected $expectedSize, got ${temporary.length()})")
             log("VERIFY", "Temporary size verified: ${temporary.length()} bytes")
             if (source.length() != expectedSize || source.lastModified() / 1000L != expectedMtimeSeconds) {
                 throw IllegalStateException("Source changed while copying (size/mtime-to-seconds)")
             }
-            setForeground(createForegroundInfo(currentType, processed, total, processed * 1000, "Restoring timestamp", "Applying original modified time"))
+            publishProgress(processed, total, succeeded, failed, source.name, "Restoring timestamp", 0, "Applying original modified time")
             if (!temporary.setLastModified(expectedMtimeSeconds * 1000L)) throw IllegalStateException("Could not set destination mtime")
             if (!verifyDestination(temporary, temporary.name, expectedSize, expectedMtimeSeconds)) {
                 throw IllegalStateException("Temporary file verification failed (size or mtime-to-seconds)")
@@ -414,7 +418,7 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
             plan.put("phase", "publishing")
             plans.put(sourcePath, plan)
             persistState()
-            setForeground(createForegroundInfo(currentType, processed, total, processed * 1000, "Finishing " + source.name, "Publishing verified copy"))
+            publishProgress(processed, total, succeeded, failed, source.name, "Finishing", 0, "Publishing verified copy")
             log("STATE", "Publishing phase persisted before destination rename")
             Files.move(temporary.toPath(), destination.toPath())
             log("PUBLISH", "Temporary file published using same-directory filesystem move")
@@ -613,13 +617,19 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
         createChannel()
         val title = if (type == TYPE_MOVE) "Moving $total images" else "Copying $total images"
         val maximum = (total.coerceAtLeast(1) * 1000)
+        val launchIntent = applicationContext.packageManager.getLaunchIntentForPackage(applicationContext.packageName)
+        val contentIntent = launchIntent?.let {
+            PendingIntent.getActivity(applicationContext, operationNotificationId(false), it, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        }
         val notification = NotificationCompat.Builder(applicationContext, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_menu_gallery)
             .setContentTitle(title)
             .setContentText(mainLine.take(100))
             .setSubText(detailLine.take(80))
             .setStyle(NotificationCompat.BigTextStyle().bigText("$mainLine\n$detailLine\n$processed of $total items"))
+            .setContentIntent(contentIntent)
             .setProgress(maximum, progressUnits.coerceIn(0, maximum), total == 0)
+            .setCategory(NotificationCompat.CATEGORY_PROGRESS)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setAutoCancel(false)
@@ -632,11 +642,20 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
         createChannel()
         val hasIssues = Regex("[1-9][0-9]* failed").containsMatchIn(summary) || summary.contains("album refresh failure", ignoreCase = true)
         val title = if (summary.startsWith("Operation failed")) "File operation failed" else if (hasIssues) (if (type == TYPE_MOVE) "Move finished with issues" else "Copy finished with issues") else if (type == TYPE_MOVE) "Move completed" else "Copy completed"
+        val succeeded = Regex("(\\d+) succeeded").find(summary)?.groupValues?.get(1)?.toIntOrNull() ?: 0
+        val failed = Regex("(\\d+) failed").find(summary)?.groupValues?.get(1)?.toIntOrNull() ?: 0
+        val compactText = if (summary.startsWith("Operation failed")) "Operation could not start" else if (summary.contains("album refresh failure", ignoreCase = true)) "$succeeded succeeded · album refresh failed" else "$succeeded succeeded · $failed failed"
+        val launchIntent = applicationContext.packageManager.getLaunchIntentForPackage(applicationContext.packageName)
+        val contentIntent = launchIntent?.let {
+            PendingIntent.getActivity(applicationContext, operationNotificationId(true), it, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        }
         val notification = NotificationCompat.Builder(applicationContext, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_menu_gallery)
             .setContentTitle(title)
-            .setContentText(summary)
+            .setContentText(compactText)
             .setStyle(NotificationCompat.BigTextStyle().bigText(summary))
+            .setCategory(NotificationCompat.CATEGORY_STATUS
+            .setContentIntent(contentIntent)
             .setProgress(0, 0, false)
             .setAutoCancel(false)
             .setOngoing(false)
@@ -655,7 +674,9 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
     private fun createChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             applicationContext.getSystemService(NotificationManager::class.java).createNotificationChannel(
-                NotificationChannel(CHANNEL_ID, "File operations", NotificationManager.IMPORTANCE_LOW)
+                NotificationChannel(CHANNEL_ID, "File operations", NotificationManager.IMPORTANCE_LOW).apply {
+                    description = "Progress and results for media copy and move operations"
+                }
             )
         }
     }
