@@ -94,27 +94,6 @@ class GalleryViewModel(
                     .firstOrNull { it.contains("[FAIL]") }
                     ?.substringAfter("[FAIL]")?.trim()
 
-                // Refresh the registered albums affected by these paths, then update their covers.
-                val sourceAlbums = albums.value.filter { album ->
-                    uniqueSources.any { path ->
-                        path.startsWith(album.canonicalPath.trimEnd(File.separatorChar) + File.separator)
-                    }
-                }
-                val affectedAlbums = (sourceAlbums + destinationAlbum).distinctBy { it.id }
-                val reconciliationFailures = mutableListOf<String>()
-                withContext(Dispatchers.IO) {
-                    for (album in affectedAlbums) {
-                        try {
-                            mediaIndexRepository.reconcileAlbum(album.id, File(album.canonicalPath))
-                            ThumbnailWorkScheduler.enqueueAlbum(getApplication(), album.id, force = false)
-                        } catch (exception: CancellationException) {
-                            throw exception
-                        } catch (exception: Exception) {
-                            reconciliationFailures += "${album.name}: ${exception.message ?: "index refresh failed"}"
-                        }
-                    }
-                }
-
                 val verb = if (type == MediaFileOperationWorker.TYPE_MOVE) "Moved" else "Copied"
                 val message = if (failed == 0 && succeeded > 0) {
                     "$verb ${succeeded} item${if (succeeded == 1) "" else "s"} to ${destinationAlbum.name}"
@@ -125,9 +104,8 @@ class GalleryViewModel(
                 } else {
                     "$verb ${succeeded} of ${uniqueSources.size}; ${failed} failed"
                 }
-                val finalMessage = if (reconciliationFailures.isEmpty()) message
-                    else "$message · Index refresh incomplete: ${reconciliationFailures.joinToString("; ")}"
-                _fileOperationMessages.emit(finalMessage)
+                _fileOperationMessages.emit(message)
+
             } catch (exception: CancellationException) {
                 throw exception
             } catch (exception: Exception) {
