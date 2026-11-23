@@ -129,7 +129,10 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
                 // planned and persisted before the file operation began.
                 if (destination.exists() && verifyDestination(destination, destination.name, expectedSize, expectedMtimeSeconds)) {
                     if (type == TYPE_MOVE && source.exists()) {
-                        log("RECOVERY", "Verified planned destination from an interrupted Move; source still exists, removing source")
+                        if (source.length() != expectedSize || source.lastModified() / 1000L != expectedMtimeSeconds) {
+                            throw IllegalStateException("Source changed since the operation was planned; source retained during recovery")
+                        }
+                        log("RECOVERY", "Verified planned destination from an interrupted Move; source still matches planned size/mtime, removing source")
                         if (!source.delete() || source.exists()) throw IllegalStateException("Verified destination but could not delete source during recovery")
                     }
                     markCompleted(sourcePath, destination, expectedSize, expectedMtimeSeconds, "recovered")
@@ -238,6 +241,9 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
         failed: Int
     ): Boolean {
         if (!source.isFile || !source.canRead()) throw IllegalStateException("Source is unavailable")
+        if (source.length() != expectedSize || source.lastModified() / 1000L != expectedMtimeSeconds) {
+            throw IllegalStateException("Source changed since the operation was planned")
+        }
         val destination = File(destinationPath)
         val expectedDestinationName = destination.name
         if (source.parentFile?.canonicalPath == destinationDirectory.canonicalPath) {
