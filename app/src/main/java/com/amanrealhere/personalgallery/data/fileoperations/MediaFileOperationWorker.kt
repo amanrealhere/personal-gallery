@@ -263,7 +263,7 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
                 log("FAIL", detail)
             }
             processed++
-            publishProgress(processed, total, succeeded, failed, source.name, "$action processed")
+            publishProgress(processed, total, succeeded, failed, source.name, "Completed", 0, "Finished " + source.name)
         }
 
         if (processed < total) {
@@ -594,6 +594,7 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
             status.equals("Moving", ignoreCase = true) -> "Moving " + current.take(90)
             status.contains("fallback", ignoreCase = true) -> "Moving " + current.take(90)
             status.startsWith("Preparing", ignoreCase = true) -> status.take(90)
+            status.equals("Completed", ignoreCase = true) -> "Completed"
             status.contains("index", ignoreCase = true) || status.contains("album", ignoreCase = true) -> status.take(90)
             else -> status.take(90)
         }
