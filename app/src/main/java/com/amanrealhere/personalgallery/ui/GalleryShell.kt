@@ -9,6 +9,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.Alignment
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Spacer
@@ -87,7 +89,7 @@ private fun OperationLogText(text: String) {
                 else -> scheme.onSurfaceVariant
             }
             withStyle(SpanStyle(color = lineColor)) { append(line) }
-            if (index < lines.lastIndex) append("\\n")
+            if (index < lines.lastIndex) append("\n")
         }
     }
     Text(annotated, style = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 11.sp, lineHeight = 14.sp))
@@ -121,9 +123,9 @@ fun GalleryShell(viewModel: GalleryViewModel) {
     val activeFileOperation = fileOperationWorkInfos.firstOrNull { it.state == WorkInfo.State.RUNNING }
     val displayedFileOperation = activeFileOperation
         ?: latestFileOperationId?.let { id -> fileOperationWorkInfos.firstOrNull { it.id.toString() == id } }
-    var savedOperationState by remember { mutableStateOf(JSONObject())
+    var savedOperationState by remember { mutableStateOf(JSONObject()) }
     var savedOperationResult by remember { mutableStateOf(JSONObject()) }
-    LaunchedEffect(latestFileOperationId, displayedFileOperation?.state, displayedFileOperation?.progress, displayedFileOperation?.outputData) {
+    LaunchedEffect(latestFileOperationId, displayedFileOperation?.state) {
         val id = latestFileOperationId
         savedOperationState = if (id == null) JSONObject() else withContext(Dispatchers.IO) {
             val stateFile = File(context.filesDir, "media-operation-" + id + ".state.json")
@@ -145,6 +147,7 @@ fun GalleryShell(viewModel: GalleryViewModel) {
         ?: displayedFileOperation?.outputData?.getInt(MediaFileOperationWorker.KEY_PROGRESS_UNITS, fileOperationProcessed * 1000)
         ?: savedOperationResult.optInt(MediaFileOperationWorker.KEY_PROGRESS_UNITS, fileOperationProcessed * 1000)
     val operationStartedAtMillis = savedOperationState.optLong("startedAtMillis", 0L)
+    val operationDurationMs = savedOperationResult.optLong("durationMs", -1L)
     val fileOperationStatus = if (displayedFileOperation?.state?.isFinished == true) {
         displayedFileOperation.outputData.getString(MediaFileOperationWorker.KEY_SUMMARY)
             ?: displayedFileOperation.outputData.getString(MediaFileOperationWorker.KEY_ERROR)
@@ -162,7 +165,7 @@ fun GalleryShell(viewModel: GalleryViewModel) {
     val pendingToastOperationIds = remember { mutableSetOf<String>() }
     LaunchedEffect(viewModel) {
         launch { viewModel.fileOperationStartedIds.collect { pendingToastOperationIds.add(it) } }
-        launch { viewModel.fileOperationMessages.collect { operationLaunchError = it } }
+        launch { viewModel.fileOperationMessages.collect { operationLaunchError = it; Toast.makeText(context, "Could not queue operation", Toast.LENGTH_SHORT).show() } }
     }
     LaunchedEffect(fileOperationWorkInfos) {
         for (work in fileOperationWorkInfos.filter { it.state.isFinished }) {
