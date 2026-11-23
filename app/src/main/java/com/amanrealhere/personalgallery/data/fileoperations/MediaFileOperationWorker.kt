@@ -328,13 +328,13 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
         }
 
         val reconciliationSuffix = if (reconciliationFailures == 0) "" else " · $reconciliationFailures album refresh failure(s)"
-        val methodCounts = completed.keys().asSequence().map { completed.optJSONObject(it)?.optString("method").orEmpty() }.toList()
+        val methodCounts = plans.keys().asSequence().map { plans.optJSONObject(it)?.optString("method").orEmpty() }.toList()
         val copyCount = if (type == TYPE_COPY) succeeded else methodCounts.count { it == "copy" }
         val atomicMoveCount = methodCounts.count { it == "atomic-rename" }
         val fallbackMoveCount = methodCounts.count { it == "copy-delete" }
-        val recoveredMoveCount = methodCounts.count { it == "recovered" || it == "unknown-move" || it == "verified" || it.isBlank() }
-        val methodSummary = if (type == TYPE_MOVE) "$atomicMoveCount atomic rename(s) · $fallbackMoveCount copy-and-delete move(s) · $recoveredMoveCount recovered move(s)" else "$copyCount copied"
-        val verificationSummary = "$succeeded file(s) verified (name, size, mtime-to-seconds)"
+        val recoveredMoveCount = methodCounts.count { it == "recovered" || it == "unknown-move" || it == "verified" }
+        val methodSummary = if (type == TYPE_MOVE) "$atomicMoveCount atomic rename attempt(s) · $fallbackMoveCount copy-and-delete fallback(s) · $recoveredMoveCount recovered move(s)" else "$copyCount copied"
+        val verificationSummary = if (type == TYPE_MOVE) "$succeeded file(s) verified (name, size, mtime-to-seconds; atomic moves preserve time, fallback copies restore it)" else "$succeeded file(s) verified (name, size, mtime-to-seconds; original mtime restored)"
         val summary = "$succeeded succeeded, $failed failed, $processed of $total processed · $methodSummary · $verificationSummary$reconciliationSuffix"
         log("SUMMARY", summary)
         if (reconciliationFailures > 0) {
