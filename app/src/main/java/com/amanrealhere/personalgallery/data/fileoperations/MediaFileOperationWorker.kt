@@ -147,12 +147,16 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
                 if (plan.optBoolean("started", false) && plan.optBoolean("sourcePresent", true) && destination.exists() &&
                     verifyDestination(destination, destination.name, expectedSize, expectedMtimeSeconds) &&
                     recoverablePublishedFile) {
-                    if (type == TYPE_MOVE && source.exists()) {
-                        if (source.length() != expectedSize || source.lastModified() / 1000L != expectedMtimeSeconds) {
-                            throw IllegalStateException("Source changed since the operation was planned; source retained during recovery")
+                    if (type == TYPE_MOVE) {
+                        if (source.exists()) {
+                            if (source.length() != expectedSize || source.lastModified() / 1000L != expectedMtimeSeconds) {
+                                throw IllegalStateException("Source changed since the operation was planned; source retained during recovery")
+                            }
+                            log("RECOVERY", "Verified destination from an interrupted Move; source still matches planned name/size/mtime-to-seconds, removing source")
+                            if (!source.delete() || source.exists()) throw IllegalStateException("Verified destination but could not delete source during recovery")
+                        } else {
+                            log("RECOVERY", "Verified destination from an interrupted atomic Move; source is already absent")
                         }
-                        log("RECOVERY", "Verified destination from an interrupted Move; source still matches planned name/size/mtime-to-seconds, removing source")
-                        if (!source.delete() || source.exists()) throw IllegalStateException("Verified destination but could not delete source during recovery")
                     } else {
                         log("RECOVERY", "Verified published destination from an interrupted Copy; source remains untouched")
                     }
