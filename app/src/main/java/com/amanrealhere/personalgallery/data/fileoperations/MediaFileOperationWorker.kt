@@ -24,7 +24,6 @@ import org.json.JSONObject
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
-import java.io.RandomAccessFile
 import java.io.IOException
 import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.Files
@@ -543,31 +542,28 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
         return sourceRoot != null && destinationRoot != null && sourceRoot != destinationRoot
     }
 
-    private suspend fun publishProgress(processed: Int, total: Int, succeeded: Int, failed: Int, current: String, status: String) {
+    private suspend fun publishProgress(
+        processed: Int, total: Int, succeeded: Int, failed: Int, current: String, status: String,
+        currentFileProgressPermille: Int = 0, detail: String = status
+    ) {
+        val progressUnits = processed * 1000 + currentFileProgressPermille.coerceIn(0, 999)
         setProgress(workDataOf(
             KEY_PROCESSED to processed, KEY_TOTAL to total,
             KEY_SUCCEEDED to succeeded, KEY_FAILED to failed,
-            KEY_CURRENT to current.take(160), KEY_STATUS to status.take(240),
-            KEY_LOG_PATH to operationLog.absolutePath, KEY_LOG_PREVIEW to logPreview()
+            KEY_CURRENT to current.take(160), KEY_STATUS to status.take(120),
+            KEY_DETAIL to detail.take(120), KEY_PROGRESS_UNITS to progressUnits,
+            KEY_LOG_PATH to operationLog.absolutePath
         ))
-        setForeground(createForegroundInfo(currentType, processed, total, "$status · ${current.take(160)}"))
-    }
-
-    private fun logPreview(): String = try {
-        RandomAccessFile(operationLog, "r").use { file ->
-            val maxBytes = 8192L
-            val start = (file.length() - maxBytes).coerceAtLeast(0L)
-            file.seek(start)
-            if (start > 0L) file.readLine()
-            val remaining = (file.length() - file.filePointer).coerceAtMost(maxBytes).toInt()
-            val bytes = ByteArray(remaining)
-            file.readFully(bytes)
-            String(bytes, Charsets.UTF_8).takeLast(1800)
+        val mainLine = when {
+            status.equals("Copying", ignoreCase = true) -> "Copying " + current.take(90)
+            status.equals("Moving", ignoreCase = true) -> "Moving " + current.take(90)
+            status.contains("fallback", ignoreCase = true) -> "Moving " + current.take(90)
+            status.startsWith("Preparing", ignoreCase = true) -> status.take(90)
+            status.contains("index", ignoreCase = true) || status.contains("album", ignoreCase = true) -> status.take(90)
+            else -> status.take(90)
         }
-    } catch (_: Exception) {
-        "Detailed operation log is being written."
+        setForeground(createForegroundInfo(currentType, processed, total, progressUnits, mainLine.take(100), detail.take(90)))
     }
-
     private fun log(tag: String, message: String) {
         val timestamp = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US).format(java.util.Date())
         operationLog.appendText("[$timestamp] [$tag] $message\n")
@@ -601,17 +597,17 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
         }
     }
 
-    private fun createForegroundInfo(type: String, processed: Int, total: Int, status: String): ForegroundInfo {
+    private fun createForegroundInfo(type: String, processed: Int, total: Int, progressUnits: Int, mainLine: String, detailLine: String): ForegroundInfo {
         createChannel()
-        val title = if (type == TYPE_MOVE) "Moving images" else "Copying images"
-        val percent = if (total == 0) 0 else processed * 100 / total
-        val details = logPreview()
+        val title = if (type == TYPE_MOVE) "Moving $total images" else "Copying $total images"
+        val maximum = (total.coerceAtLeast(1) * 1000)
         val notification = NotificationCompat.Builder(applicationContext, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_menu_gallery)
             .setContentTitle(title)
-            .setContentText(status)
-            .setStyle(NotificationCompat.BigTextStyle().bigText("$status\n$processed of $total items ($percent%)\n\n$details"))
-            .setProgress(total.coerceAtLeast(1), processed, total == 0)
+            .setContentText(mainLine.take(100))
+            .setSubText(detailLine.take(80))
+            .setStyle(NotificationCompat.BigTextStyle().bigText("$mainLine\n$detailLine\n$processed of $total items"))
+            .setProgress(maximum, progressUnits.coerceIn(0, maximum), total == 0)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setAutoCancel(false)
@@ -627,7 +623,8 @@ class MediaFileOperationWorker(context: Context, params: WorkerParameters) :
             .setSmallIcon(android.R.drawable.ic_menu_gallery)
             .setContentTitle(title)
             .setContentText(summary)
-            .setStyle(NotificationCompat.BigTextStyle().bigText("$summary\n\n${logPreview()}\nFull log: ${operationLog.name}"))
+            .setStyle(NotificationCompat.BigTextStyle().bigText(summary))
+            .setProgress(0, 0, false)
             .setAutoCancel(false)
             .setOngoing(false)
             .build()
