@@ -42,6 +42,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -83,12 +84,16 @@ fun AlbumContentsScreen(
     var pendingOperationType by remember(album.id) { mutableStateOf("COPY") }
     BackHandler(enabled = selectedPaths.isNotEmpty()) { selectedPaths = emptySet() }
 
+    // Keep the click callback pointed at the latest Compose selection state so
+    // rapid taps cannot toggle from a stale captured set.
+    val latestSelectedPaths by rememberUpdatedState(selectedPaths)
     // Use a fresh PagingAdapter for each album to avoid carrying recycled cells
     // and adapter state across different PagingData generations.
     val pagingAdapter = remember(album.id) { MediaGridPagingAdapter() }
     LaunchedEffect(selectedPaths, pagingAdapter) {
         pagingAdapter.updateSelection(selectedPaths) { path ->
-            selectedPaths = if (path in selectedPaths) selectedPaths - path else selectedPaths + path
+            val current = latestSelectedPaths
+            selectedPaths = if (path in current) current - path else current + path
         }
     }
     var loadState by remember(pagingAdapter) { mutableStateOf<androidx.paging.CombinedLoadStates?>(null) }
