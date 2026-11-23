@@ -96,12 +96,16 @@ fun GalleryShell(viewModel: GalleryViewModel) {
     }
     var operationDialogVisible by remember { mutableStateOf(false) }
     var operationLogText by remember { mutableStateOf("Loading operation log…") }
+    val operationLogScrollState = rememberScrollState()
     var operationLaunchError by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(viewModel) {
         viewModel.fileOperationMessages.collect { operationLaunchError = it }
     }
     LaunchedEffect(latestFileOperationId) {
         if (latestFileOperationId != null) operationDialogVisible = true
+    }
+    LaunchedEffect(operationLogText) {
+        operationLogScrollState.animateScrollTo(operationLogScrollState.maxValue)
     }
     LaunchedEffect(displayedFileOperation?.id, displayedFileOperation?.progress, displayedFileOperation?.outputData) {
         val work = displayedFileOperation
@@ -307,7 +311,7 @@ fun GalleryShell(viewModel: GalleryViewModel) {
                         onDismissRequest = {},
                         title = { Text(if (displayedFileOperation.state.isFinished) "File operation finished" else "File operation") },
                         text = {
-                            Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
+                            Column(Modifier.fillMaxWidth().verticalScroll(operationLogScrollState)) {
                                 val queuedOperations = fileOperationWorkInfos.count {
                                     it.state == WorkInfo.State.ENQUEUED || it.state == WorkInfo.State.BLOCKED
                                 }
