@@ -10,7 +10,7 @@ ksp {
 
 android {
     namespace = "com.amanrealhere.personalgallery"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.amanrealhere.personalgallery"
@@ -42,11 +42,17 @@ dependencies {
 
     implementation(libs.activity.compose)
     implementation(libs.compose.ui)
+    implementation(libs.compose.foundation)
+    implementation(libs.compose.runtime)
     implementation(libs.compose.animation)
     implementation(libs.compose.ui.graphics)
     implementation(libs.compose.ui.tooling.preview)
     implementation(libs.compose.material3)
     implementation(libs.compose.material.icons.core)
+
+    // Declare AndroidX Core and coroutines directly because application source uses their APIs.
+    implementation(libs.core.ktx)
+    implementation(libs.coroutines.android)
 
     // Glide handles original-media decoding, transformed-resource disk caching,
     // request lifecycle and in-memory reuse for the scrolling grid.
