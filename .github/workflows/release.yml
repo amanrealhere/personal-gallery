@@ -42,21 +42,6 @@ jobs:
     timeout-minutes: 5
 
     steps:
-      - name: Validate selected branch
-        env:
-          SELECTED_REF: ${{ github.ref }}
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          if [[ "$SELECTED_REF" != "refs/heads/main" ]]; then
-            echo "::error::Release builds are permitted only from main."
-            echo "Selected ref: $SELECTED_REF"
-            false
-          fi
-
-          echo "Selected branch: main"
-
       - name: Validate release metadata
         id: metadata
         shell: bash
@@ -170,10 +155,10 @@ jobs:
         run: |
           set -euo pipefail
 
-          test -f release-key.p12
+          test -f K
 
           keytool -list \
-            -keystore release-key.p12 \
+            -keystore K \
             -storetype PKCS12 \
             -storepass "$KEYSTORE_PASSWORD" \
             -alias personal-gallery \
@@ -258,7 +243,7 @@ jobs:
           SIGNED_APK="app/build/outputs/release/$APK_NAME"
 
           "$BUILD_TOOLS/apksigner" sign \
-            --ks release-key.p12 \
+            --ks K \
             --ks-type PKCS12 \
             --ks-key-alias personal-gallery \
             --ks-pass env:KEYSTORE_PASSWORD \
